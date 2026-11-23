@@ -25,9 +25,19 @@ jobs:
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Assemble the read-only preview
         run: |
-          mkdir -p _site/previews
-          cp demo/index.html demo/style.css public/superai-icon.png _site/
-          cp docs/previews/{player,devices,assistant}{,-mobile}.png _site/previews/
+          set -euo pipefail
+          screenshots=(docs/previews/{player,devices,assistant}{,-mobile}.png)
+          revision=$(sha256sum demo/index.html demo/style.css public/superai-icon.png "${screenshots[@]}" | sha256sum | cut -c1-12)
+          preview_dir="_site/view/$revision"
+          mkdir -p "$preview_dir/previews" _site/previews
+
+          cp demo/index.html demo/style.css public/superai-icon.png "$preview_dir/"
+          cp "${screenshots[@]}" "$preview_dir/previews/"
+          sed -E "s#\./(style\.css|superai-icon\.png|previews/)#./view/$revision/\1#g" demo/index.html > _site/index.html
+
+          # Keep the asset URLs in previously cached versions of the root page readable.
+          cp demo/style.css public/superai-icon.png _site/
+          cp "${screenshots[@]}" _site/previews/
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: _site
