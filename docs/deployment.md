@@ -16,15 +16,28 @@ SUPERAI_IMAGE=taokeone/superai:0.1.0 docker compose up -d --no-build --pull alwa
 
 两种快速部署方式默认只在本机提供管理页面。先完成管理员初始化，再按需要开放局域网访问。
 
-| 设置     | Docker Compose                      | 命令行                    |
-| -------- | ----------------------------------- | ------------------------- |
-| 监听地址 | 在 `.env` 中设置 `PUBLISH_HOST`     | 设置 `HOST`               |
-| 端口     | `PUBLISH_PORT`，默认 `8787`         | `PORT`，默认 `8787`       |
-| 数据     | `speaker-data` 卷挂载到容器 `/data` | `DATA_DIR`，默认 `./data` |
+| 设置     | `docker run`                           | Docker Compose                      | Node.js 命令行            |
+| -------- | -------------------------------------- | ----------------------------------- | ------------------------- |
+| 监听地址 | `-p` 中的宿主机 IP，示例为 `127.0.0.1` | 在 `.env` 中设置 `PUBLISH_HOST`     | 设置 `HOST`               |
+| 端口     | `-p` 中的宿主机端口，示例为 `8787`     | `PUBLISH_PORT`，默认 `8787`         | `PORT`，默认 `8787`       |
+| 数据     | `superai-data` 卷挂载到容器 `/data`    | `speaker-data` 卷挂载到容器 `/data` | `DATA_DIR`，默认 `./data` |
 
-要允许音箱访问私人曲库，可将对应的监听地址设为部署机器的局域网 IP，例如 `192.168.1.10`。重启后在「平台设置 → 音乐服务」填写 `http://192.168.1.10:8787`，使用实际 IP 和端口。浏览器和音箱都需要能访问播放所用的网络地址。
+## 局域网访问
 
-可用 `curl -fsS http://localhost:8787/healthz` 检查进程是否正常。使用 HTTPS 反向代理时设置 `COOKIE_SECURE=true`。只在可信反向代理覆盖 `X-Forwarded-For`，且客户端只能经该代理访问平台时启用 `TRUST_PROXY=true`。
+如果按 README 的 `docker run` 命令部署，`127.0.0.1` 只接受本机连接。Docker 在创建容器时确定端口映射，需要重新创建容器才能改绑定地址。以下命令把旧容器改名保留，并继续挂载原 `superai-data` 数据卷。请把 `192.168.1.10` 换成部署机的局域网 IP。
+
+```bash
+docker stop superai && docker rename superai superai-local && \
+docker run -d --name superai --restart unless-stopped \
+  -p 192.168.1.10:8787:8787 -v superai-data:/data \
+  taokeone/superai:0.1.0
+```
+
+使用 Compose 时，在原项目的 `.env` 中将 `PUBLISH_HOST` 设为部署机的局域网 IP，再执行 `docker compose up -d`。使用 Node.js 时，设置 `HOST` 后重启。
+
+在同一局域网的另一台设备打开 `http://192.168.1.10:8787`。如果连接超时，检查部署机是否允许局域网入站 TCP `8787`。需要投放私人曲库时，在「平台设置 → 音乐服务」填写音箱可以访问的相同地址。
+
+可在实际访问地址后加上 `/healthz` 检查进程是否正常。使用 HTTPS 反向代理时设置 `COOKIE_SECURE=true`。只在可信反向代理覆盖 `X-Forwarded-For`，且客户端只能经该代理访问平台时启用 `TRUST_PROXY=true`。
 
 ## 持久化和备份
 

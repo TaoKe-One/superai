@@ -37,6 +37,8 @@ docker run -d --name superai --restart unless-stopped \
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide `0.1.0` and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
 
+The command above makes the site available on the deployment host. For access from other devices on the same LAN, finish administrator setup and change `-p 127.0.0.1:8787:8787` to `-p 192.168.1.10:8787:8787`, using the deployment host's LAN IP. See [LAN access](docs/deployment.en.md#lan-access) for an existing container.
+
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash

@@ -16,15 +16,28 @@ You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and r
 
 Both quick-start methods make the admin page available locally by default. Finish administrator setup before enabling LAN access.
 
-| Setting      | Docker Compose                           | Command line                     |
-| ------------ | ---------------------------------------- | -------------------------------- |
-| Bind address | Set `PUBLISH_HOST` in `.env`             | Set `HOST`                       |
-| Port         | `PUBLISH_PORT`, defaults to `8787`       | `PORT`, defaults to `8787`       |
-| Data         | `speaker-data` volume mounted at `/data` | `DATA_DIR`, defaults to `./data` |
+| Setting      | `docker run`                             | Docker Compose                           | Node.js command line             |
+| ------------ | ---------------------------------------- | ---------------------------------------- | -------------------------------- |
+| Bind address | Host IP in `-p`, example `127.0.0.1`     | Set `PUBLISH_HOST` in `.env`             | Set `HOST`                       |
+| Port         | Host port in `-p`, example `8787`        | `PUBLISH_PORT`, defaults to `8787`       | `PORT`, defaults to `8787`       |
+| Data         | `superai-data` volume mounted at `/data` | `speaker-data` volume mounted at `/data` | `DATA_DIR`, defaults to `./data` |
 
-To cast tracks from a private library, bind to the server's LAN IP, for example `192.168.1.10`. Restart and enter `http://192.168.1.10:8787` under Music Services in settings, using the actual IP and port. Both the browser and the speaker need to reach the addresses used for their playback.
+## LAN access
 
-Run `curl -fsS http://localhost:8787/healthz` to check that the service is running. For an HTTPS reverse proxy, set `COOKIE_SECURE=true`. Enable `TRUST_PROXY=true` only if a trusted proxy overwrites `X-Forwarded-For` and clients can reach the app only through that proxy.
+The README's `docker run` command binds to `127.0.0.1`, which accepts connections from the deployment host. Docker sets port mappings when it creates a container. The commands below keep the old container under another name and mount the existing `superai-data` volume. Replace `192.168.1.10` with the deployment host's LAN IP.
+
+```bash
+docker stop superai && docker rename superai superai-local && \
+docker run -d --name superai --restart unless-stopped \
+  -p 192.168.1.10:8787:8787 -v superai-data:/data \
+  taokeone/superai:0.1.0
+```
+
+For Compose, set `PUBLISH_HOST` to the host's LAN IP in the existing project's `.env` and run `docker compose up -d`. For Node.js, set `HOST` and restart the process.
+
+Open `http://192.168.1.10:8787` on another device on the same LAN. If the connection times out, check that the host allows inbound TCP `8787` from the LAN. To cast private-library tracks, enter the same speaker-reachable address under Music Services in settings.
+
+Append `/healthz` to the address you use to check that the service is running. For an HTTPS reverse proxy, set `COOKIE_SECURE=true`. Enable `TRUST_PROXY=true` only if a trusted proxy overwrites `X-Forwarded-For` and clients can reach the app only through that proxy.
 
 ## Persistence and backups
 
