@@ -7,7 +7,7 @@
 在项目根目录运行以下命令，从 Docker Hub 拉取镜像。已有部署请在原 Compose 项目中执行，以继续使用原 `speaker-data` 卷。
 
 ```bash
-SUPERAI_IMAGE=taokeone/superai:0.1.0 docker compose up -d --no-build --pull always
+SUPERAI_IMAGE=taokeone/superai:0.1.1 docker compose up -d --no-build --pull always
 ```
 
 可把 `SUPERAI_IMAGE` 保存到 `.env`，需要升级时更换版本标签，再执行 `docker compose up -d --no-build --pull always`。如果要从本地源码构建，移除 `SUPERAI_IMAGE` 后执行 `docker compose up -d --build`。
@@ -30,7 +30,7 @@ SUPERAI_IMAGE=taokeone/superai:0.1.0 docker compose up -d --no-build --pull alwa
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.0
+  taokeone/superai:0.1.1
 ```
 
 使用 Compose 时，在原项目的 `.env` 中将 `PUBLISH_HOST` 设为部署机的局域网 IP，再执行 `docker compose up -d`。使用 Node.js 时，设置 `HOST` 后重启。
@@ -73,5 +73,21 @@ services:
 
 - **扫码后看不到音箱**。确认手机和平台使用同一个小米账号，再在音箱设备页刷新设备。需要排查时可启用 `MIOT_LOGIN_DIAGNOSTICS=true`，复现后关闭。
 - **在线目录能搜索，但无法播放**。在播放器的「音乐源管理」启用支持该音乐平台的音源，并运行可用性检测。检测验证样本，播放结果随音源和曲目而变化。
-- **LX 音源报 Fake-IP DNS 错误**。如果部署网络允许访问 Cloudflare HTTPS DNS，可设置 `LX_DNS_OVER_HTTPS=true` 后重启。
+- **LX 音源报 Fake-IP DNS 错误**。新版 Docker 镜像默认启用 Cloudflare HTTPS DNS，以兼容 OpenClash Fake-IP。已有部署若显式设置了 `LX_DNS_OVER_HTTPS=false`，请改为 `true` 并重新创建容器。若网络无法访问该加密 DNS，可设为 `false`，同时让系统 DNS 返回真实公网 IP。
 - **WebDAV 音频转码失败**。Docker 镜像自带 FFmpeg。命令行部署可用 `ffmpeg -version` 检查安装，也可通过 `FFMPEG_PATH` 指定可执行文件。
+
+## 忘记管理员密码
+
+新版平台运行时，在容器终端执行：
+
+```bash
+npm run reset-admin-password
+```
+
+或在宿主机执行（替换实际容器名）：
+
+```bash
+docker exec -u node -w /app superai npm run reset-admin-password
+```
+
+命令显示随机生成的新密码，立即使旧密码和已有登录会话失效，无需重启，保留其他配置。请妥善保存输出。旧镜像需先更新到包含此命令的版本。命令行部署使用相同命令，以及与平台相同的系统用户、工作目录、`.env` 和 `DATA_DIR`。管理通道仅监听数据目录中的本地 Unix socket，不开放网络接口。

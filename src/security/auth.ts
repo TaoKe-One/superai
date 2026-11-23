@@ -34,6 +34,18 @@ export class AdminAuth {
     return this.createSession();
   }
 
+  async resetPassword(): Promise<string> {
+    const password = randomBytes(24).toString("base64url");
+    const salt = randomBytes(16).toString("hex");
+    const hash = scryptSync(password, salt, 64).toString("hex");
+    await this.store.update((state) => {
+      state.admin = { salt, hash };
+    });
+    this.sessions.clear();
+    this.loginFailures.clear();
+    return password;
+  }
+
   login(password: string, clientKey = "unknown"): string | null {
     const now = Date.now();
     for (const [key, failure] of this.loginFailures)

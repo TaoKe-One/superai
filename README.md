@@ -32,17 +32,17 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 127.0.0.1:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.0
+  taokeone/superai:0.1.1
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供 `0.1.0` 和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供 `0.1.1` 和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
 
 上面的命令只允许部署机访问。要让同一局域网的手机或电脑打开页面，初始化管理员后，把 `-p 127.0.0.1:8787:8787` 改成 `-p 192.168.1.10:8787:8787`，其中 `192.168.1.10` 换成部署机的局域网 IP。已有容器请参考[局域网访问](docs/deployment.md#局域网访问)。
 
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.0
+docker pull ghcr.io/taoke-one/superai:0.1.1
 ```
 
 也可以克隆项目后从源码构建，或在现有 Compose 项目中直接拉取镜像。详见[部署配置](docs/deployment.md)。

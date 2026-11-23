@@ -32,17 +32,17 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 127.0.0.1:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.0
+  taokeone/superai:0.1.1
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. Both registries provide `0.1.0` and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+Settings, playlists, and the key live in the `superai-data` volume. Both registries provide `0.1.1` and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
 
 The command above makes the site available on the deployment host. For access from other devices on the same LAN, finish administrator setup and change `-p 127.0.0.1:8787:8787` to `-p 192.168.1.10:8787:8787`, using the deployment host's LAN IP. See [LAN access](docs/deployment.en.md#lan-access) for an existing container.
 
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.0
+docker pull ghcr.io/taoke-one/superai:0.1.1
 ```
 
 For source builds or pulling the image into an existing Compose project, see the [deployment guide](docs/deployment.en.md).

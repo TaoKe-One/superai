@@ -57,6 +57,7 @@ import {
 import { PlaybackService } from "./playback/service.ts";
 import { SpeakerUrlRelay } from "./playback/url-relay.ts";
 import { MiotClient } from "./miot/client.ts";
+import { startAdminControl } from "./security/admin-control.ts";
 import { AdminAuth } from "./security/auth.ts";
 import {
   JsonStore,
@@ -179,6 +180,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 
 export interface AppServerOptions {
   dataDir?: string;
+  adminControl?: boolean;
   fetchImpl?: typeof fetch;
   voiceIntervalMs?: number;
   playbackUrl?: (url: string) => string;
@@ -1084,6 +1086,10 @@ export async function createAppServer(options: AppServerOptions = {}) {
     void voiceCoordinator.stop();
     stopSourceCheck(store);
   });
+  if (options.adminControl) {
+    const control = await startAdminControl(auth, options.dataDir);
+    server.on("close", () => control.close());
+  }
   return server;
 }
 
@@ -1972,6 +1978,7 @@ if (isMain) {
   let server: Awaited<ReturnType<typeof createAppServer>>;
   try {
     server = await createAppServer({
+      adminControl: true,
       playbackUrl: relay ? (url) => relay.issue(url) : undefined,
     });
   } catch (error) {
