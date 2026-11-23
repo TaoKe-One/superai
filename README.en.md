@@ -13,7 +13,7 @@ A self-hosted web player and voice assistant for Xiaomi speakers. Play music in 
 
 ## Interface preview
 
-Explore the player, speaker devices, and AI assistant in a read-only demo with sample data. [Live preview](https://taoke-one.github.io/superai/)
+These screenshots show the running SuperAI app with sample data. The read-only preview lets you switch between the player, speaker devices, and AI assistant. [Live preview](https://taoke-one.github.io/superai/)
 
 [![Player and current queue](docs/previews/player.png)](https://taoke-one.github.io/superai/#player)
 

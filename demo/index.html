@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="超级爱网页播放器、音箱设备和 AI 助手的只读演示"
+      content="超级爱播放器、音箱设备和 AI 助手的实际界面截图"
     />
     <meta
       http-equiv="Content-Security-Policy"
@@ -16,217 +16,57 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="topbar-inner">
-        <a class="brand" href="#player">
-          <img src="./superai-icon.png" alt="" width="38" height="38" />
-          超级爱
-        </a>
-        <nav aria-label="演示页面">
-          <a href="#player">播放器</a>
-          <a href="#devices">音箱设备</a>
-          <a href="#assistant">AI 助手</a>
-        </nav>
-        <a class="repo-link" href="https://github.com/TaoKe-One/superai"
-          >GitHub ↗</a
-        >
-      </div>
+    <header>
+      <h1>超级爱界面预览</h1>
+      <a class="repository" href="https://github.com/TaoKe-One/superai"
+        >GitHub ↗</a
+      >
+      <p>截图来自实际应用，使用示例数据。可切换三个视图。</p>
+      <nav aria-label="预览视图">
+        <a href="#player">播放器</a>
+        <a href="#devices">音箱设备</a>
+        <a href="#assistant">AI 助手</a>
+      </nav>
     </header>
 
-    <main class="workspace" id="preview">
-      <div class="preview-note">
-        <span class="dot"></span> 只读演示 · 页面内容均为示例
-      </div>
-
-      <section
-        id="player"
-        class="panel"
-        aria-labelledby="player-heading"
-        tabindex="-1"
-      >
-        <div class="player-layout">
-          <div class="player-library">
-            <div class="cover">
-              <div class="cover-orbit"></div>
-              <div class="cover-copy">
-                <span>今日歌单</span>
-                <h1 id="player-heading">山间傍晚</h1>
-                <p>沿着松林走一段，听一会儿音乐。</p>
-              </div>
-            </div>
-            <div class="list-heading">
-              <h2>歌单曲目</h2>
-              <span>私人音乐库</span>
-            </div>
-            <div class="track-list">
-              <div class="track active">
-                <span class="track-art mountain" aria-hidden="true"></span>
-                <div><strong>晚风经过松林</strong><span>纸船乐队</span></div>
-                <time datetime="PT4M12S">04:12</time>
-              </div>
-              <div class="track">
-                <span class="track-art dusk" aria-hidden="true"></span>
-                <div><strong>沿海小路</strong><span>夏日来信</span></div>
-                <time datetime="PT3M48S">03:48</time>
-              </div>
-              <div class="track">
-                <span class="track-art water" aria-hidden="true"></span>
-                <div><strong>云停在湖面</strong><span>空谷</span></div>
-                <time datetime="PT5M6S">05:06</time>
-              </div>
-              <div class="track">
-                <span class="track-art sunset" aria-hidden="true"></span>
-                <div><strong>暮色邮局</strong><span>纸船乐队</span></div>
-                <time datetime="PT4M25S">04:25</time>
-              </div>
-            </div>
-          </div>
-          <aside class="queue card" aria-labelledby="queue-heading">
-            <div class="list-heading">
-              <h2 id="queue-heading">当前队列</h2>
-              <span>顺序播放</span>
-            </div>
-            <div class="queue-current">
-              <div class="equalizer" aria-hidden="true">
-                <i></i><i></i><i></i>
-              </div>
-              <div><strong>晚风经过松林</strong><span>纸船乐队</span></div>
-            </div>
-            <ol class="queue-list">
-              <li>沿海小路</li>
-              <li>云停在湖面</li>
-              <li>暮色邮局</li>
-            </ol>
-            <div class="output">
-              <span class="dot"></span><span>客厅小爱音箱</span
-              ><span>音箱投放</span>
-            </div>
-          </aside>
-        </div>
-        <div class="playbar card">
-          <span class="track-art mountain" aria-hidden="true"></span>
-          <div class="playbar-title">
-            <strong>晚风经过松林</strong><span>纸船乐队</span>
-          </div>
-          <div class="timeline">
-            <time datetime="PT1M26S">01:26</time>
-            <div
-              class="progress"
-              role="progressbar"
-              aria-label="示例播放进度"
-              aria-valuenow="34"
-            >
-              <span></span>
-            </div>
-            <time datetime="PT4M12S">04:12</time>
-          </div>
-          <span class="output-name">客厅小爱音箱</span>
-        </div>
+    <main>
+      <section id="player" aria-label="播放器预览" tabindex="-1">
+        <picture>
+          <source
+            media="(max-width: 600px)"
+            srcset="./previews/player-mobile.png"
+          />
+          <img
+            src="./previews/player.png"
+            alt="超级爱实际播放器界面，展示示例音乐库和正在播放的歌曲"
+          />
+        </picture>
       </section>
-
-      <section
-        id="devices"
-        class="panel"
-        aria-labelledby="devices-heading"
-        tabindex="-1"
-      >
-        <div class="page-heading">
-          <h1 id="devices-heading">音箱设备</h1>
-          <p>查看设备连接状态和语音任务记录。</p>
-        </div>
-        <div class="dashboard">
-          <div class="card device-card">
-            <h2>设备列表</h2>
-            <div class="device selected">
-              <span class="speaker" aria-hidden="true"></span>
-              <div>
-                <strong>客厅小爱音箱</strong><span>小爱音箱 Play · L05C</span>
-              </div>
-              <span class="device-state"><span class="dot"></span> 在线</span>
-            </div>
-            <div class="device">
-              <span class="speaker" aria-hidden="true"></span>
-              <div>
-                <strong>书房小爱音箱</strong><span>小爱音箱 · LX06</span>
-              </div>
-              <span class="device-state"><span class="dot"></span> 在线</span>
-            </div>
-          </div>
-          <div class="card activity">
-            <div class="list-heading">
-              <h2>语音接管与诊断</h2>
-              <span>客厅小爱音箱</span>
-            </div>
-            <blockquote>“来几首适合晚上听的歌”</blockquote>
-            <ol class="steps">
-              <li>
-                <span>10:24:02</span>
-                <div>
-                  <strong>收到语音</strong><small>来自客厅小爱音箱</small>
-                </div>
-              </li>
-              <li>
-                <span>10:24:03</span>
-                <div>
-                  <strong>理解意图</strong><small>按风格挑选歌曲</small>
-                </div>
-              </li>
-              <li>
-                <span>10:24:04</span>
-                <div>
-                  <strong>提交播放队列</strong
-                  ><small>从「晚风经过松林」开始播放</small>
-                </div>
-              </li>
-            </ol>
-          </div>
-        </div>
+      <section id="devices" aria-label="音箱设备预览" tabindex="-1">
+        <picture>
+          <source
+            media="(max-width: 600px)"
+            srcset="./previews/devices-mobile.png"
+          />
+          <img
+            src="./previews/devices.png"
+            alt="超级爱实际音箱设备界面，展示示例音箱和语音处理记录"
+            loading="lazy"
+          />
+        </picture>
       </section>
-
-      <section
-        id="assistant"
-        class="panel"
-        aria-labelledby="assistant-heading"
-        tabindex="-1"
-      >
-        <div class="page-heading">
-          <h1 id="assistant-heading">AI 助手</h1>
-          <p>问答和补充信息会沿用同一台音箱的对话上下文。</p>
-        </div>
-        <div class="dashboard">
-          <div class="conversation card">
-            <div class="list-heading">
-              <h2>语音问答</h2>
-              <span>客厅小爱音箱</span>
-            </div>
-            <div class="dialog-line person">
-              <span>你</span>
-              <p>为什么傍晚的天空会变红？</p>
-            </div>
-            <div class="dialog-line">
-              <span>超级爱</span>
-              <p>
-                日落时，阳光穿过更长的大气路径。蓝光更容易向别处散射，抵达我们眼睛的日光里，红色和橙色就更明显。
-              </p>
-            </div>
-            <div class="dialog-line person">
-              <span>你</span>
-              <p>那阴天也会有晚霞吗？</p>
-            </div>
-            <div class="dialog-line">
-              <span>超级爱</span>
-              <p>
-                会。只要太阳光能从云层缝隙照到云底，云就可能被染红。云层太厚时，晚霞通常就看不见了。
-              </p>
-            </div>
-          </div>
-          <aside class="card assistant-device">
-            <span class="speaker large" aria-hidden="true"></span>
-            <h2>客厅小爱音箱</h2>
-            <p>语音输入、AI 理解、音箱播报</p>
-            <div class="device-state"><span class="dot"></span> 示例对话</div>
-          </aside>
-        </div>
+      <section id="assistant" aria-label="AI 助手预览" tabindex="-1">
+        <picture>
+          <source
+            media="(max-width: 600px)"
+            srcset="./previews/assistant-mobile.png"
+          />
+          <img
+            src="./previews/assistant.png"
+            alt="超级爱实际 AI 助手界面，展示一轮示例问答"
+            loading="lazy"
+          />
+        </picture>
       </section>
     </main>
   </body>

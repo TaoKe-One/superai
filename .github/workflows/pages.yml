@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "demo/**"
+      - "docs/previews/**"
       - "public/superai-icon.png"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -24,8 +25,9 @@ jobs:
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Assemble the read-only preview
         run: |
-          mkdir _site
+          mkdir -p _site/previews
           cp demo/index.html demo/style.css public/superai-icon.png _site/
+          cp docs/previews/{player,devices,assistant}{,-mobile}.png _site/previews/
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: _site

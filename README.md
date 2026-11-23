@@ -13,7 +13,7 @@
 
 ## 界面预览
 
-使用示例数据的只读演示，可切换播放器、音箱设备和 AI 助手。 [在线预览](https://taoke-one.github.io/superai/)
+截图来自超级爱实际运行的界面，内容使用示例数据。在线预览可切换播放器、音箱设备和 AI 助手。 [在线预览](https://taoke-one.github.io/superai/)
 
 [![播放器与当前队列](docs/previews/player.png)](https://taoke-one.github.io/superai/#player)
 
