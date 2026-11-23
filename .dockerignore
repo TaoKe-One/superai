@@ -9,6 +9,7 @@ data
 test
 scripts
 docs
+demo
 README*.md
 LESSONS*.md
 VERIFICATION*.md

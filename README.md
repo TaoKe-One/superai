@@ -1,6 +1,6 @@
 # 超级爱（superai）
 
-[English](README.en.md) · [部署配置](docs/deployment.md) · [Apache-2.0](LICENSE)
+[English](README.en.md) · [部署配置](docs/deployment.md) · [Apache-2.0](LICENSE) · [在线预览](https://taoke-one.github.io/superai/)
 
 自托管网页播放器和小爱音箱助手。用浏览器播放音乐、投放到音箱，或直接对小爱说出点歌和问答请求。平台独立运行，部署时只需要 Docker 或 Node.js。
 
@@ -10,6 +10,16 @@
 - **音乐库**支持 Navidrome / Subsonic、飞牛音乐、WebDAV，也可导入自备的 LX 音源。在线目录支持歌曲、歌单和排行榜。
 - **小爱联动**支持米家扫码、设备发现、多台音箱独立监听、点歌和播放控制。开启监听后，平台从小米云端读取对话，由 AI 理解意图并执行。
 - **AI 问答**支持 MiniMax 和 OpenAI 兼容服务。回答和澄清可由提问的音箱播报，后续补充沿用该音箱的对话上下文。
+
+## 界面预览
+
+使用示例数据的只读演示，可切换播放器、音箱设备和 AI 助手。 [在线预览](https://taoke-one.github.io/superai/)
+
+[![播放器与当前队列](docs/previews/player.png)](https://taoke-one.github.io/superai/#player)
+
+[![音箱设备与语音诊断](docs/previews/devices.png)](https://taoke-one.github.io/superai/#devices)
+
+[![AI 助手与上下文问答](docs/previews/assistant.png)](https://taoke-one.github.io/superai/#assistant)
 
 ## 部署
 
@@ -25,7 +35,13 @@ docker run -d --name superai --restart unless-stopped \
   taokeone/superai:0.1.0
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。镜像提供版本标签和 `latest`。[镜像页面](https://hub.docker.com/r/taokeone/superai)
+配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供 `0.1.0` 和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+
+也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
+
+```bash
+docker pull ghcr.io/taoke-one/superai:0.1.0
+```
 
 也可以克隆项目后从源码构建，或在现有 Compose 项目中直接拉取镜像。详见[部署配置](docs/deployment.md)。
 

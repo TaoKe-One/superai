@@ -1,6 +1,6 @@
 # 超级爱 (superai)
 
-[简体中文](README.md) · [Deployment configuration](docs/deployment.en.md) · [Apache-2.0](LICENSE)
+[简体中文](README.md) · [Deployment configuration](docs/deployment.en.md) · [Apache-2.0](LICENSE) · [Live preview](https://taoke-one.github.io/superai/)
 
 A self-hosted web player and voice assistant for Xiaomi speakers. Play music in your browser, cast it to a speaker, or ask XiaoAi to play music and answer questions. The platform runs on Docker or Node.js.
 
@@ -10,6 +10,16 @@ A self-hosted web player and voice assistant for Xiaomi speakers. Play music in 
 - **Music libraries** from Navidrome / Subsonic, fnOS Music, and WebDAV. You can also import your own LX source for songs, playlists, and charts.
 - **XiaoAi integration** with Xiaomi QR sign-in, device discovery, per-speaker conversation monitoring, music requests, and playback controls. When enabled, the platform reads Xiaomi cloud conversation records and uses AI to interpret requests.
 - **AI answers** using MiniMax or an OpenAI-compatible service. The originating speaker can read answers and clarification questions aloud and keep context for follow-up replies.
+
+## Interface preview
+
+Explore the player, speaker devices, and AI assistant in a read-only demo with sample data. [Live preview](https://taoke-one.github.io/superai/)
+
+[![Player and current queue](docs/previews/player.png)](https://taoke-one.github.io/superai/#player)
+
+[![Speaker devices and voice diagnostics](docs/previews/devices.png)](https://taoke-one.github.io/superai/#devices)
+
+[![AI assistant and contextual replies](docs/previews/assistant.png)](https://taoke-one.github.io/superai/#assistant)
 
 ## Deploy
 
@@ -25,7 +35,13 @@ docker run -d --name superai --restart unless-stopped \
   taokeone/superai:0.1.0
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. The image offers version tags and `latest`. [Container package](https://hub.docker.com/r/taokeone/superai)
+Settings, playlists, and the key live in the `superai-data` volume. Both registries provide `0.1.0` and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+
+You can also pull from GitHub or use the same reference in the run command above.
+
+```bash
+docker pull ghcr.io/taoke-one/superai:0.1.0
+```
 
 For source builds or pulling the image into an existing Compose project, see the [deployment guide](docs/deployment.en.md).
 
