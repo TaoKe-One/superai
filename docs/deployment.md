@@ -4,10 +4,10 @@
 
 ## Docker Compose
 
-在项目根目录运行以下命令，从 GitHub Container Registry 拉取镜像。已有部署请在原 Compose 项目中执行，以继续使用原 `speaker-data` 卷。
+在项目根目录运行以下命令，从 Docker Hub 拉取镜像。已有部署请在原 Compose 项目中执行，以继续使用原 `speaker-data` 卷。
 
 ```bash
-SUPERAI_IMAGE=ghcr.io/taoke-one/superai:0.1.0 docker compose up -d --no-build --pull always
+SUPERAI_IMAGE=taokeone/superai:0.1.0 docker compose up -d --no-build --pull always
 ```
 
 可把 `SUPERAI_IMAGE` 保存到 `.env`，需要升级时更换版本标签，再执行 `docker compose up -d --no-build --pull always`。如果要从本地源码构建，移除 `SUPERAI_IMAGE` 后执行 `docker compose up -d --build`。

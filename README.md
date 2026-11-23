@@ -17,15 +17,15 @@
 
 ### 方式一：Docker 镜像
 
-镜像支持 Linux `amd64` 和 `arm64`，内置 FFmpeg。安装 Docker 后即可启动。
+Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本。Docker 会根据系统架构自动选择。ARM 设备需要运行 64 位系统。
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 127.0.0.1:8787:8787 -v superai-data:/data \
-  ghcr.io/taoke-one/superai:0.1.0
+  taokeone/superai:0.1.0
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。镜像提供版本标签和 `latest`。[镜像页面](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+配置、歌单和密钥保存在 `superai-data` 数据卷。镜像提供版本标签和 `latest`。[镜像页面](https://hub.docker.com/r/taokeone/superai)
 
 也可以克隆项目后从源码构建，或在现有 Compose 项目中直接拉取镜像。详见[部署配置](docs/deployment.md)。
 

@@ -17,15 +17,15 @@ Choose one deployment method. Both default to [http://localhost:8787](http://loc
 
 ### Option 1 — Docker image
 
-The image supports Linux `amd64` and `arm64` and includes FFmpeg. Start it with Docker.
+The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Docker selects the matching architecture automatically. ARM devices need a 64-bit operating system.
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 127.0.0.1:8787:8787 -v superai-data:/data \
-  ghcr.io/taoke-one/superai:0.1.0
+  taokeone/superai:0.1.0
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. The image offers version tags and `latest`. [Container package](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+Settings, playlists, and the key live in the `superai-data` volume. The image offers version tags and `latest`. [Container package](https://hub.docker.com/r/taokeone/superai)
 
 For source builds or pulling the image into an existing Compose project, see the [deployment guide](docs/deployment.en.md).
 

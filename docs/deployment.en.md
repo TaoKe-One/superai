@@ -4,10 +4,10 @@
 
 ## Docker Compose
 
-Run this in the project root to pull the image from GitHub Container Registry. For an existing installation, use the same Compose project so the service keeps its `speaker-data` volume.
+Run this in the project root to pull the image from Docker Hub. For an existing installation, use the same Compose project so the service keeps its `speaker-data` volume.
 
 ```bash
-SUPERAI_IMAGE=ghcr.io/taoke-one/superai:0.1.0 docker compose up -d --no-build --pull always
+SUPERAI_IMAGE=taokeone/superai:0.1.0 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
