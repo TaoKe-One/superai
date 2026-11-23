@@ -19,4 +19,4 @@ SuperAI brings a web player, private music libraries, and Xiaomi speakers togeth
 | [Feature guide](usage.en.md)   | Queues, My Music, online sources, private libraries, speakers, and voice  |
 | [FAQ](faq.en.md)               | Connection and playback errors, AI failures, passwords, and data recovery |
 
-The guide covers the public release and labels features still in development. Check the release notes before choosing an image. [GitHub Releases](https://github.com/TaoKe-One/superai/releases)
+The guide covers installation, upgrades, and features in public releases. Check the release notes before choosing an image. [GitHub Releases](https://github.com/TaoKe-One/superai/releases)

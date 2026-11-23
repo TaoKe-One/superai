@@ -9,7 +9,7 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ docker run -d --name superai --restart unless-stopped \
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.1
+docker pull ghcr.io/taoke-one/superai:0.1.2
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.1
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.1
+    image: taokeone/superai:0.1.2
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 也可在源码目录使用仓库内的 Compose 文件。已有部署请沿用原 Compose 项目与数据卷。
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.1 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.2 docker compose up -d --no-build --pull always
 ```
 
 可把 `SUPERAI_IMAGE` 保存到 `.env`，需要升级时更换版本标签，再执行 `docker compose up -d --no-build --pull always`。如果要从本地源码构建，移除 `SUPERAI_IMAGE` 后执行 `docker compose up -d --build`。
@@ -72,7 +72,7 @@ GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。
 
 「平台设置 → 系统更新」可以检查 GitHub 正式版本。使用 `docker run` 部署时，可添加一个独立的升级服务，使管理员能在页面点击「立即升级」。初次启用需要使用一个已包含本功能的正式镜像。随后更新时，平台先下载对应架构的镜像，保留原端口和数据卷。切换时应用会短暂重启并要求重新登录。若新容器未通过健康检查，升级服务会恢复原容器和原配置。
 
-一键升级目前在开发版中提供。已有的公开 v0.1.1 部署可按对应安装方式手动更新。
+一键升级自 v0.1.2 起提供。v0.1.1 及更早版本请先按原部署方式手动更新。
 
 将 `SUPERAI_IMAGE` 设为包含本功能的正式版本镜像。已有部署请在一次性重建时沿用原有的端口、数据卷、环境变量和网络设置。以下示例使用 Docker Hub、固定端口及默认容器名称。
 
@@ -114,7 +114,7 @@ README 中的 Docker 和 Docker Compose 快速部署示例将端口发布到宿�
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 使用仓库自带的 Compose 配置时，在原项目的 `.env` 中将 `PUBLISH_HOST` 设为 `0.0.0.0` 或部署机的局域网 IP，再执行 `docker compose up -d`。使用 README 的独立 Compose 示例时，直接修改 `ports`。使用 Node.js 时，设置 `HOST` 后重启。

@@ -50,6 +50,7 @@ export type AssistantIntent =
       question: string;
       answer?: string;
       needsSearch?: boolean;
+      modelError?: "format" | "request";
       confidence: number;
       source: "llm" | "fallback";
     }

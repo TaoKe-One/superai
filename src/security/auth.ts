@@ -4,6 +4,18 @@ import type { JsonStore } from "../storage/store.ts";
 
 const SESSION_COOKIE = "speaker_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const MIN_PASSWORD_LENGTH = 5;
+const MAX_PASSWORD_LENGTH = 200;
+
+function validatePasswordLength(password: string): void {
+  if (
+    password.length < MIN_PASSWORD_LENGTH ||
+    password.length > MAX_PASSWORD_LENGTH
+  )
+    throw new Error(
+      `管理员密码需要 ${MIN_PASSWORD_LENGTH} 至 ${MAX_PASSWORD_LENGTH} 个字符`,
+    );
+}
 
 export class AdminAuth {
   private readonly store: JsonStore;
@@ -23,8 +35,7 @@ export class AdminAuth {
 
   async setup(password: string): Promise<string> {
     if (!this.needsSetup()) throw new Error("管理员已初始化");
-    if (password.length < 12 || password.length > 200)
-      throw new Error("管理员密码至少 12 个字符");
+    validatePasswordLength(password);
     const salt = randomBytes(16).toString("hex");
     const hash = scryptSync(password, salt, 64).toString("hex");
     await this.store.update((state) => {
@@ -47,6 +58,33 @@ export class AdminAuth {
   }
 
   login(password: string, clientKey = "unknown"): string | null {
+    return this.verifyPassword(password, clientKey)
+      ? this.createSession()
+      : null;
+  }
+
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+    clientKey: string,
+  ): Promise<boolean> {
+    validatePasswordLength(newPassword);
+    const admin = this.verifyPassword(currentPassword, clientKey);
+    if (!admin) return false;
+
+    const salt = randomBytes(16).toString("hex");
+    const hash = scryptSync(newPassword, salt, 64).toString("hex");
+    await this.store.update((state) => {
+      if (state.admin?.salt !== admin.salt || state.admin.hash !== admin.hash)
+        throw new Error("管理员密码已更新，请重新登录");
+      state.admin = { salt, hash };
+    });
+    this.sessions.clear();
+    this.loginFailures.clear();
+    return true;
+  }
+
+  private verifyPassword(password: string, clientKey: string) {
     const now = Date.now();
     for (const [key, failure] of this.loginFailures)
       if (failure.windowExpiresAt <= now && failure.lockedUntil <= now)
@@ -60,14 +98,14 @@ export class AdminAuth {
       if (oldest) this.loginFailures.delete(oldest);
     }
     let failure = this.loginFailures.get(clientKey);
+    if (failure && now < failure.lockedUntil) return null;
     if (!failure || failure.windowExpiresAt <= now)
       failure = {
         failures: 0,
         windowExpiresAt: now + 15 * 60 * 1000,
         lockedUntil: 0,
       };
-    if (now < failure.lockedUntil) return null;
-    if (password.length > 200) return null;
+    if (password.length > MAX_PASSWORD_LENGTH) return null;
     const admin = this.store.snapshot().admin;
     if (!admin) return null;
     const candidate = Buffer.from(
@@ -88,7 +126,7 @@ export class AdminAuth {
       return null;
     }
     this.loginFailures.delete(clientKey);
-    return this.createSession();
+    return admin;
   }
 
   isAuthenticated(request: IncomingMessage): boolean {

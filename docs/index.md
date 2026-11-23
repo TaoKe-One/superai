@@ -19,4 +19,4 @@
 | [功能使用](usage.md)      | 播放队列、我的音乐、音源、私人库、音箱与语音            |
 | [常见问题](faq.md)        | 网页打不开、音源检测与播放失败、AI 报错、密码和数据恢复 |
 
-手册同时记录公开发行版的安装方法和开发版功能。涉及开发版的入口会在对应章节标明。安装镜像前可先查看版本说明。[GitHub Releases](https://github.com/TaoKe-One/superai/releases)
+手册按部署方式说明公开版本的安装、升级和功能使用。安装镜像前可先查看版本说明。[GitHub Releases](https://github.com/TaoKe-One/superai/releases)

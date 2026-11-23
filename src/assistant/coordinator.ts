@@ -221,7 +221,7 @@ export class VoiceCoordinator {
                 : accepted
                   ? "accepted"
                   : "completed";
-        if (!signal.aborted && !result.speechError) {
+        if (!signal.aborted && !result.speechError && !result.modelError) {
           history.push(
             { role: "user", content: task.text },
             { role: "assistant", content: task.message },

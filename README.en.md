@@ -32,7 +32,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.1
+docker pull ghcr.io/taoke-one/superai:0.1.2
 ```
 
 ### Option 2 — Docker Compose
@@ -52,7 +52,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.1
+    image: taokeone/superai:0.1.2
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,7 +69,7 @@ Run this in the same directory.
 docker compose up -d
 ```
 
-You can also set `image` to `ghcr.io/taoke-one/superai:0.1.1`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
+You can also set `image` to `ghcr.io/taoke-one/superai:0.1.2`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
 
 ### Option 3 — Command line
 
@@ -91,7 +91,7 @@ GitHub-generated source archives include `test/` for development and CI. If you 
 
 Open **Settings → System Update** to check for stable GitHub releases. With `docker run`, first deploy an image that supports one-click upgrades and start the separate updater container. Then **Upgrade Now** downloads and switches the image while keeping the port mappings and data volume. The app restarts briefly, and you need to sign in again. If the new container fails its health check, the updater restores the previous container and configuration. [Setup steps](docs/deployment.en.md#one-click-upgrades-in-settings)
 
-One-click upgrades are currently available in the development version. Update the public v0.1.1 release, Docker Compose deployments, and Node.js deployments manually using the corresponding steps. [Deployment and updates](docs/deployment.en.md)
+One-click upgrades are available starting with v0.1.2. Upgrade v0.1.1 and earlier manually first. Docker Compose and Node.js deployments follow their own update steps. [Deployment and updates](docs/deployment.en.md)
 
 ## First run
 
@@ -100,7 +100,7 @@ One-click upgrades are currently available in the development version. Update th
 3. Go to Speaker Devices, scan the Xiaomi sign-in QR code, and select a speaker. Skip this step for browser playback. To cast a private library track, enter a platform LAN address the speaker can reach in Music Services.
 4. For voice requests, test and save a model under AI Models in settings, then enable conversation monitoring in Speaker Devices. Try asking XiaoAi to play a song or explain how tides work.
 
-In the development version, open the password panel in Settings and enter your current password and a new one of at least five characters. Sign in again on each device with the new password after saving. The public v0.1.1 release provides a password recovery command inside the container. [v0.1.1 release notes](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
+Starting with v0.1.2, open the password panel in Settings and enter your current password and a new one of at least five characters. Sign in again on each device with the new password after saving. The container password recovery command is available starting with v0.1.1. [v0.1.1 release notes](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
 
 ## Speaker compatibility
 

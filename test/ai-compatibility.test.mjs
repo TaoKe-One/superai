@@ -105,3 +105,47 @@ test("MiniMax M3 uses direct single-intent replies and retains thinking for task
     [{ type: "disabled" }, undefined, undefined],
   );
 });
+
+test("MiniMax M3 treats plain-text conversation history as context for JSON intent routing", async () => {
+  const history = [
+    { role: "user", content: "介绍一下月球" },
+    { role: "assistant", content: "月球是地球唯一的天然卫星。" },
+  ];
+  const classifier = new OpenAICompatibleIntentClassifier(
+    {
+      ...config,
+      baseUrl: "https://api.minimax.cn/v1/chat/completions",
+      model: "MiniMax-M3",
+    },
+    async (_, options) => {
+      const body = JSON.parse(options.body);
+      // The real model sometimes copies the earlier assistant's plain-text format.
+      if (body.messages.some((message) => message.role === "assistant"))
+        return Response.json({
+          choices: [{ message: { content: "月球也有昼夜之分。" } }],
+        });
+      assert.ok(body.messages[0].content.includes("history"));
+      assert.deepEqual(JSON.parse(body.messages[1].content), {
+        history,
+        request: "再补充一下",
+      });
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                action: "answer",
+                answer: "月球也有昼夜之分。",
+                confidence: 1,
+              }),
+            },
+          },
+        ],
+      });
+    },
+  );
+  assert.equal(
+    (await classifier.classify("再补充一下", history)).answer,
+    "月球也有昼夜之分。",
+  );
+});

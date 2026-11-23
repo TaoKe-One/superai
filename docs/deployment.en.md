@@ -9,7 +9,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.1
+docker pull ghcr.io/taoke-one/superai:0.1.2
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.1
+    image: taokeone/superai:0.1.2
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 To use the Compose file included in the repository, run this in the project root. Existing installations should keep the same Compose project and data volume.
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.1 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.2 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
@@ -72,7 +72,7 @@ GitHub-generated source archives include `test/` for development and CI. If you 
 
 Open **Settings → System Update** to check for stable GitHub releases. With a `docker run` deployment, an optional updater container enables the upgrade button. Start with an official image that includes the updater. The updater downloads the image for your architecture before switching containers and reuses the original ports and data volume. Expect a short restart and sign in again afterward. If the new container fails its health check, the updater restores the previous container and configuration.
 
-One-click upgrades are available in the development version. Update existing public v0.1.1 installations using their deployment instructions.
+One-click upgrades are available starting with v0.1.2. First update v0.1.1 and earlier using their deployment instructions.
 
 Set `SUPERAI_IMAGE` to an official versioned image that includes the updater. When recreating an existing container to enable this feature, reuse its ports, data volume, environment variables, and network settings. This example uses Docker Hub, a fixed port, and the default container name.
 
@@ -114,7 +114,7 @@ An existing container deployed with `-p 127.0.0.1:8787:8787` accepts connections
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 For the repository Compose file, set `PUBLISH_HOST` to `0.0.0.0` or the host's LAN IP in the existing project's `.env`, then run `docker compose up -d`. With the standalone Compose example in the README, edit `ports` directly. For Node.js, set `HOST` and restart the process.

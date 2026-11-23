@@ -1,5 +1,6 @@
 import { parseRuleIntent } from "./rules.ts";
 import { nativeIntent } from "./native.ts";
+import { ModelResponseError } from "./llm.ts";
 import type {
   AssistantIntent,
   ConversationTurn,
@@ -68,12 +69,14 @@ export class IntentRouter {
           };
         }
         return result;
-      } catch {
+      } catch (error) {
         signal?.throwIfAborted();
         if (deterministic) return deterministic;
         return {
           action: "answer",
           question: query,
+          modelError:
+            error instanceof ModelResponseError ? "format" : "request",
           confidence: 0.35,
           source: "fallback",
         };

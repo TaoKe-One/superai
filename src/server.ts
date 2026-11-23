@@ -60,6 +60,14 @@ import { MiotClient } from "./miot/client.ts";
 import { startAdminControl } from "./security/admin-control.ts";
 import { AdminAuth } from "./security/auth.ts";
 import {
+  appVersion,
+  latestVersion,
+  localRequest,
+  newerVersion,
+  stableVersion,
+  UPDATE_SOCKET,
+} from "./update/protocol.ts";
+import {
   JsonStore,
   type MusicSourceConfig,
   type StoredTrack,
@@ -184,6 +192,7 @@ export interface AppServerOptions {
   fetchImpl?: typeof fetch;
   voiceIntervalMs?: number;
   playbackUrl?: (url: string) => string;
+  updateSocket?: string;
 }
 
 export async function createAppServer(options: AppServerOptions = {}) {
@@ -191,6 +200,9 @@ export async function createAppServer(options: AppServerOptions = {}) {
   await store.init();
   const auth = new AdminAuth(store);
   const fetchImpl = options.fetchImpl ?? fetch;
+  const updateSocket =
+    options.updateSocket ??
+    (process.env.SUPERAI_UPDATES === "true" ? UPDATE_SOCKET : "");
   const miot = new MiotClient(store, fetchImpl, options.playbackUrl);
   const playback = playbackFor(store, miot, fetchImpl);
   const lx = new LxMusicService(store, fetchImpl);
@@ -278,7 +290,7 @@ export async function createAppServer(options: AppServerOptions = {}) {
       return;
     }
     if (request.method === "GET" && url.pathname === "/healthz") {
-      sendJson(response, 200, { status: "ok" });
+      sendJson(response, 200, { status: "ok", version: appVersion });
       return;
     }
     if (request.method === "GET" && url.pathname === "/superai-icon.png") {
@@ -389,6 +401,91 @@ export async function createAppServer(options: AppServerOptions = {}) {
       }
       if (!auth.isAuthenticated(request)) {
         sendJson(response, 401, { error: "authentication_required" });
+        return;
+      }
+      if (url.pathname === "/api/system/update") {
+        if (request.method === "GET") {
+          const status = updateSocket
+            ? await localRequest(updateSocket, "GET", "/").catch(() => null)
+            : null;
+          const result = {
+            version: appVersion,
+            enabled: status?.status === 200,
+            ...(status?.status === 200 &&
+              JSON.parse(status.body.toString("utf8"))),
+          };
+          if (!url.searchParams.has("check")) {
+            sendJson(response, 200, result);
+            return;
+          }
+          try {
+            const latest = await latestVersion(fetchImpl);
+            sendJson(response, 200, {
+              ...result,
+              latest,
+              available: newerVersion(latest, appVersion),
+            });
+          } catch {
+            sendJson(response, 502, {
+              error: "暂时无法读取 GitHub 发布信息，请稍后重试。",
+            });
+          }
+          return;
+        }
+        if (request.method === "POST") {
+          if (!updateSocket) {
+            sendJson(response, 409, { error: "此部署尚未启用后台升级服务。" });
+            return;
+          }
+          const { version } = objectValue(await readJson(request));
+          if (!auth.isAuthenticated(request)) {
+            sendJson(response, 401, { error: "authentication_required" });
+            return;
+          }
+          if (!stableVersion(version) || !newerVersion(version, appVersion)) {
+            sendJson(response, 400, { error: "请选择更新的正式版本。" });
+            return;
+          }
+          const result = await localRequest(
+            updateSocket,
+            "POST",
+            "/" + version,
+          ).catch(() => null);
+          if (!result) {
+            sendJson(response, 503, { error: "升级服务暂时不可用。" });
+            return;
+          }
+          sendJson(
+            response,
+            result.status,
+            JSON.parse(result.body.toString("utf8")),
+          );
+          return;
+        }
+      }
+      if (
+        url.pathname === "/api/settings/admin-password" &&
+        request.method === "PUT"
+      ) {
+        const body = objectValue(await readJson(request));
+        if (!auth.isAuthenticated(request)) {
+          sendJson(response, 401, { error: "authentication_required" });
+          return;
+        }
+        const changed = await auth.changePassword(
+          stringValue(body.currentPassword),
+          stringValue(body.newPassword),
+          clientKey(request),
+        );
+        if (!changed) {
+          sendJson(response, 400, {
+            error:
+              "当前密码验证失败，请核对密码后重试。多次失败后需等待 15 分钟。",
+          });
+          return;
+        }
+        auth.logout(request, response);
+        sendJson(response, 200, { authenticated: false });
         return;
       }
       if (url.pathname === "/api/ai/providers" && request.method === "GET") {
@@ -1189,9 +1286,11 @@ export async function executeAssistant(
     results.push({ ...result, intent: task.intent, owner: task.owner });
   }
   if (results.length === 1) return results[0];
+  const modelError = results.find((result) => result.modelError)?.modelError;
   return {
     plan,
     tasks: results,
+    ...(modelError ? { modelError } : {}),
     message: results
       .map((result) => result.message)
       .filter(Boolean)
@@ -1291,9 +1390,20 @@ export async function executeAssistantIntent(
         answer = "这次没有取得可核实的联网资料，无法确认相关实时信息。";
       }
     }
-    answer ??= state.ai.apiKey
-      ? "暂时无法连接已配置的 AI 模型，请检查模型地址、密钥和网络连接后重试。"
-      : "请先在平台设置中配置可用的 AI 模型。";
+    let modelError: "format" | "request" | undefined;
+    if (answer === undefined) {
+      if (
+        state.ai.baseUrl &&
+        state.ai.model &&
+        (state.ai.apiKey || state.ai.provider === "ollama")
+      ) {
+        modelError = intent.modelError ?? "format";
+        answer =
+          modelError === "request"
+            ? "AI 模型请求失败，请稍后重试，或在平台设置中测试模型连接。"
+            : "AI 模型没有返回可用的回答，请重试。";
+      } else answer = "请先在平台设置中配置可用的 AI 模型。";
+    }
     const speechError = await speakIfAvailable(
       playback,
       state.selectedDeviceId,
@@ -1306,6 +1416,7 @@ export async function executeAssistantIntent(
       message: answer,
       sources,
       searchUsed: sources.length > 0,
+      ...(modelError ? { modelError, executionStatus: "failed" } : {}),
       ...(searchError ? { searchError } : {}),
       ...(speechError ? { speechError } : {}),
     };

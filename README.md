@@ -32,7 +32,7 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.1
+  taokeone/superai:0.1.2
 ```
 
 配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ docker run -d --name superai --restart unless-stopped \
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.1
+docker pull ghcr.io/taoke-one/superai:0.1.2
 ```
 
 ### 方式二：Docker Compose
@@ -52,7 +52,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.1
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.1
+    image: taokeone/superai:0.1.2
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,7 +69,7 @@ volumes:
 docker compose up -d
 ```
 
-也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.1`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
+也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.2`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
 
 ### 方式三：命令行
 
@@ -91,7 +91,7 @@ GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。
 
 在「**平台设置 → 系统更新**」检查 GitHub 正式版本。用 `docker run` 部署时，首次需要换到支持一键升级的镜像，并启动独立的升级容器。此后点「立即升级」即可下载新镜像并切换，保留原端口映射和数据卷。切换时平台会短暂重启，需要重新登录。新容器健康检查失败时会自动恢复旧容器和原配置。[启用步骤](docs/deployment.md#后台一键升级)
 
-一键升级目前在开发版中提供。公开的 v0.1.1、Docker Compose 和 Node.js 命令行部署均通过各自的方式手动更新。[部署与更新说明](docs/deployment.md)
+一键升级自 v0.1.2 起提供。v0.1.1 及更早版本先手动升级一次。Docker Compose 和 Node.js 命令行部署按各自的方式更新。[部署与更新说明](docs/deployment.md)
 
 ## 第一次使用
 
@@ -100,7 +100,7 @@ GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。
 3. 到「音箱设备」扫描小米登录二维码，选择音箱。浏览器播放可跳过这一步。投放私人曲库时，在音乐服务中填写音箱能访问的平台局域网地址。
 4. 如需语音助手，先到「平台设置 → AI 模型」测试并保存模型，再到「音箱设备 → 语音接管与诊断」开启监听。可以对音箱说「播放周杰伦的晴天」或「帮我解释一下潮汐是怎么形成的」。
 
-开发版可在「平台设置 → 修改管理员密码」验证当前密码并设置至少 5 个字符的新密码。保存后需要在各设备上用新密码重新登录。公开的 v0.1.1 提供容器内密码恢复命令。[v0.1.1 发布说明](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
+自 v0.1.2 起，可在「平台设置 → 修改管理员密码」验证当前密码并设置至少 5 个字符的新密码。保存后需要在各设备上用新密码重新登录。容器内密码恢复命令自 v0.1.1 起提供。[v0.1.1 发布说明](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
 
 ## 音箱兼容性
 

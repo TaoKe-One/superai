@@ -301,16 +301,17 @@ test("admin setup stores a password hash and creates an expiring session", async
   const { store } = await createStore(t);
   const auth = new AdminAuth(store);
   assert.equal(auth.needsSetup(), true);
-  await assert.rejects(() => auth.setup("short"), /至少 12/);
-  const token = await auth.setup("correct horse battery staple");
+  await assert.rejects(() => auth.setup("four"), /5 至 200/);
+  const password = "T7#qw";
+  const token = await auth.setup(password);
   assert.equal(auth.needsSetup(), false);
-  assert.notEqual(store.snapshot().admin.hash, "correct horse battery staple");
+  assert.notEqual(store.snapshot().admin.hash, password);
   assert.equal(
     auth.isAuthenticated({ headers: { cookie: "speaker_session=" + token } }),
     true,
   );
   assert.equal(auth.login("wrong password"), null);
-  assert.ok(auth.login("correct horse battery staple"));
+  assert.ok(auth.login(password));
 });
 
 test("admin login throttling is isolated per client", async (t) => {

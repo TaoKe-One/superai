@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
 import {
   createAppServer,
   executeAssistant,
@@ -26,6 +27,39 @@ test("HTTP route validates input and returns the assistant decision", async () =
 
   const wrongMethod = await handleAssistantRoute("GET", {}, router);
   assert.equal(wrongMethod.status, 405);
+});
+
+test("assistant distinguishes invalid model replies from failed requests", async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), "superai-model-response-"));
+  t.after(() => rm(dataDir, { recursive: true, force: true }));
+  const store = new JsonStore(dataDir);
+  await store.init();
+  await store.update((state) => {
+    state.config.ai = {
+      provider: "ollama",
+      baseUrl: "http://model.example/v1",
+      model: "fixture",
+      apiKey: "",
+    };
+  });
+  for (const [kind, expected, response] of [
+    [
+      "format",
+      /没有返回可用的回答/,
+      () =>
+        Response.json({
+          choices: [{ message: { content: "月球也有昼夜之分。" } }],
+        }),
+    ],
+    ["request", /模型请求失败/, () => new Response(null, { status: 503 })],
+  ]) {
+    const result = await executeAssistant("介绍一下月球", store, {}, async () =>
+      response(),
+    );
+    assert.equal(result.modelError, kind);
+    assert.equal(result.executionStatus, "failed");
+    assert.match(result.message, expected);
+  }
 });
 
 test("assistant searches a playlist and persists an encrypted queue", async (t) => {
@@ -346,6 +380,148 @@ test("settings preserve omitted secrets and can explicitly clear them", async (t
   assert.equal(status.ai.keySet, false);
   assert.equal(status.webSearch.keySet, false);
   assert.equal(status.musicSources[0].keySet, false);
+});
+
+test("administrator password changes require the current password and revoke every old session", async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), "superai-admin-password-"));
+  t.after(() => rm(dataDir, { recursive: true, force: true }));
+  const server = await createAppServer({ dataDir });
+  t.after(() => server.emit("close"));
+  const currentPassword = "setup password for tests";
+  const newPassword = " p9R ";
+  const login = (password, app = server) =>
+    requestApp(app, "/api/login", "POST", { password });
+  const session = (result) => result.headers["set-cookie"].split(";", 1)[0];
+  const setup = await requestApp(server, "/api/setup", "POST", {
+    password: currentPassword,
+  });
+  const first = session(setup);
+  const second = session(await login(currentPassword));
+  const change = (cookie, body = { currentPassword, newPassword }) =>
+    requestApp(server, "/api/settings/admin-password", "PUT", body, cookie);
+  const status = (cookie) =>
+    requestApp(server, "/api/status", "GET", undefined, cookie);
+
+  assert.equal((await change("")).status, 401);
+  assert.equal(
+    (await change(first, { currentPassword: "wrong", newPassword })).status,
+    400,
+  );
+  for (const invalid of ["four", "x".repeat(201), 12345]) {
+    const result = await change(first, {
+      currentPassword,
+      newPassword: invalid,
+    });
+    assert.equal(result.status, 400);
+    assert.match(result.body.error, /5 至 200/);
+  }
+  assert.equal((await status(first)).status, 200);
+  assert.equal((await status(second)).status, 200);
+  const stateFile = join(dataDir, "state.json");
+  const previous = JSON.parse(await readFile(stateFile, "utf8"));
+
+  const competingPassword = "c8W@q";
+  const results = await Promise.all([
+    change(first),
+    change(second, { currentPassword, newPassword: competingPassword }),
+  ]);
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  const winner = results.findIndex((result) => result.status === 200);
+  assert.match(results[winner].headers["set-cookie"], /Max-Age=0/);
+  assert.deepEqual(results[winner].body, { authenticated: false });
+  const passwords = [newPassword, competingPassword];
+  assert.equal((await status(first)).status, 401);
+  assert.equal((await status(second)).status, 401);
+  assert.equal((await login(currentPassword)).status, 401);
+  assert.equal((await login(passwords[1 - winner])).status, 401);
+  assert.equal((await login(passwords[winner])).status, 200);
+  const raw = await readFile(stateFile, "utf8");
+  const saved = JSON.parse(raw);
+  assert.deepEqual(saved.config, previous.config);
+  assert.notEqual(saved.admin.salt, previous.admin.salt);
+  for (const password of [currentPassword, ...passwords])
+    assert.equal(raw.includes(password), false);
+
+  const restarted = await createAppServer({ dataDir });
+  t.after(() => restarted.emit("close"));
+  assert.equal((await login(passwords[winner], restarted)).status, 200);
+  assert.equal((await login(currentPassword, restarted)).status, 401);
+});
+
+test("system update checks formal releases and passes only newer versions to the local updater", async (t) => {
+  const dataDir = await mkdtemp("/tmp/superai-update-http-");
+  t.after(() => rm(dataDir, { recursive: true, force: true }));
+  const updateSocket = join(dataDir, "worker.sock");
+  const requests = [];
+  const worker = createServer((req, res) => {
+    requests.push([req.method, req.url]);
+    if (req.method === "POST")
+      res.writeHead(202).end(JSON.stringify({ id: "fixture" }));
+    else res.end(JSON.stringify({ busy: false, job: null }));
+  });
+  await new Promise((resolve, reject) =>
+    worker.once("error", reject).listen(updateSocket, resolve),
+  );
+  t.after(() => new Promise((resolve) => worker.close(resolve)));
+  const server = await createAppServer({
+    dataDir,
+    updateSocket,
+    fetchImpl: async (destination) => {
+      assert.equal(
+        destination,
+        "https://api.github.com/repos/TaoKe-One/superai/releases/latest",
+      );
+      return Response.json({
+        tag_name: "v20.1.2",
+        prerelease: false,
+        draft: false,
+      });
+    },
+  });
+  t.after(() => server.emit("close"));
+  const route = "/api/system/update";
+  assert.equal(
+    (await requestApp(server, route, "POST", { version: "20.1.2" })).status,
+    401,
+  );
+  const setup = await requestApp(server, "/api/setup", "POST", {
+    password: "temporary test password",
+  });
+  const cookie = setup.headers["set-cookie"].split(";", 1)[0];
+  assert.equal(
+    (await requestApp(server, route, "POST", { version: "latest" }, cookie))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await requestApp(server, route, "POST", { version: "0.0.0" }, cookie))
+      .status,
+    400,
+  );
+  assert.deepEqual(requests, []);
+  const check = await requestApp(
+    server,
+    route + "?check",
+    "GET",
+    undefined,
+    cookie,
+  );
+  assert.equal(check.status, 200);
+  assert.equal(check.body.enabled, true);
+  assert.equal(check.body.latest, "20.1.2");
+  assert.equal(check.body.available, true);
+  const submit = await requestApp(
+    server,
+    route,
+    "POST",
+    { version: "20.1.2" },
+    cookie,
+  );
+  assert.equal(submit.status, 202);
+  assert.deepEqual(requests, [
+    ["GET", "/"],
+    ["POST", "/20.1.2"],
+  ]);
 });
 
 test("player APIs persist favorites and queue without exposing stored playback URLs", async (t) => {

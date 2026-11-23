@@ -615,6 +615,18 @@
         font-size: 17px;
         margin: 0 0 6px;
       }
+      .admin-password-panel {
+        margin-bottom: 16px;
+      }
+      .admin-password-panel summary {
+        font-weight: 600;
+      }
+      #adminPasswordForm {
+        max-width: 420px;
+      }
+      .update-panel {
+        margin-bottom: 16px;
+      }
       .search-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -737,7 +749,8 @@
           ><input
             id="password"
             type="password"
-            minlength="12"
+            minlength="5"
+            maxlength="200"
             autocomplete="current-password"
             required
           />
@@ -981,6 +994,75 @@
                 <p>配置 AI、联网能力与音乐服务</p>
               </div>
             </div>
+            <details class="main-panel update-panel" id="systemUpdate">
+              <summary>系统更新</summary>
+              <p id="systemVersion" class="footnote"></p>
+              <div class="row">
+                <button class="btn" id="checkSystemUpdate" type="button">
+                  检查更新
+                </button>
+                <button
+                  class="btn primary hidden"
+                  id="installSystemUpdate"
+                  type="button"
+                >
+                  立即升级
+                </button>
+              </div>
+              <p id="systemUpdateStatus" class="footnote" role="status"></p>
+            </details>
+            <details
+              class="main-panel admin-password-panel"
+              id="adminPasswordPanel"
+            >
+              <summary>修改管理员密码</summary>
+              <form id="adminPasswordForm" method="post">
+                <p class="footnote">
+                  新密码需为 5 至 200
+                  个字符。保存后，所有设备上的管理员会话将退出。
+                </p>
+                <div class="field">
+                  <label for="currentAdminPassword">当前密码</label>
+                  <input
+                    id="currentAdminPassword"
+                    type="password"
+                    autocomplete="current-password"
+                    maxlength="200"
+                    required
+                  />
+                </div>
+                <div class="field">
+                  <label for="newAdminPassword">新密码</label>
+                  <input
+                    id="newAdminPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    minlength="5"
+                    maxlength="200"
+                    required
+                  />
+                </div>
+                <div class="field">
+                  <label for="confirmAdminPassword">确认新密码</label>
+                  <input
+                    id="confirmAdminPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    minlength="5"
+                    maxlength="200"
+                    required
+                  />
+                </div>
+                <p class="footnote" role="alert" id="adminPasswordError"></p>
+                <button
+                  class="btn primary"
+                  type="submit"
+                  id="saveAdminPassword"
+                >
+                  保存新密码
+                </button>
+              </form>
+            </details>
             <form class="main-panel" id="settingsForm">
               <section class="section">
                 <h2>AI 模型</h2>
@@ -1177,6 +1259,10 @@
       const showAuth = (needsSetup) => {
         qrLogin.cancel();
         voicePanel.reset();
+        $("#systemUpdate").open = false;
+        $("#adminPasswordForm").reset();
+        $("#adminPasswordPanel").open = false;
+        $("#adminPasswordError").textContent = "";
         setupRequired = needsSetup;
         $("#authView").classList.remove("hidden");
         $("#appView").classList.add("hidden");
@@ -1188,7 +1274,7 @@
           ? "设置管理员密码后，开始配置音箱和服务。"
           : "请输入管理员密码继续。";
         $("#authSubmit").textContent = needsSetup ? "创建账号" : "登录";
-        $("#password").minLength = needsSetup ? 12 : 1;
+        $("#password").minLength = needsSetup ? 5 : 1;
       };
       const loadStatus = async () => {
         status = await api("/api/status");
@@ -1789,11 +1875,14 @@
             body: JSON.stringify({ text, history: chatHistory.slice(-12) }),
           });
           await renderAssistantResult(result, reply);
-          chatHistory.push(
-            { role: "user", content: text },
-            { role: "assistant", content: result.message || "已处理" },
-          );
-          chatHistory = chatHistory.slice(-12);
+          if (result.modelError) reply.classList.add("error");
+          else {
+            chatHistory.push(
+              { role: "user", content: text },
+              { role: "assistant", content: result.message || "已处理" },
+            );
+            chatHistory = chatHistory.slice(-12);
+          }
         } catch (error) {
           reply.textContent = error.message;
           reply.classList.add("error");
@@ -1929,6 +2018,136 @@
         }
       });
       $("#addSource").addEventListener("click", () => addSourceRow());
+      const updatePanel = $("#systemUpdate");
+      const checkUpdate = $("#checkSystemUpdate");
+      const installUpdate = $("#installSystemUpdate");
+      const updateStatus = $("#systemUpdateStatus");
+      let offeredVersion = "";
+      let updateJobId = "";
+      let updateTimer;
+      const updateMessages = {
+        pulling: "正在下载镜像。下载完成后，平台会短暂重启。",
+        switching: "正在备份配置并切换版本…",
+        verifying: "正在验证新版是否正常运行…",
+        rolling_back: "正在恢复原版本…",
+        updated: "升级成功。",
+        rolled_back: "升级失败，已恢复原版本。",
+        failed: "升级未完成。",
+      };
+      const refreshUpdate = async (check = false) => {
+        try {
+          const state = await api(
+            "/api/system/update" + (check ? "?check" : ""),
+          );
+          $("#systemVersion").textContent = "当前版本 v" + state.version;
+          offeredVersion = state.enabled && state.available ? state.latest : "";
+          installUpdate.classList.toggle("hidden", !offeredVersion);
+          if (state.busy && state.job) {
+            updateJobId = state.job.id;
+            updateStatus.textContent =
+              state.job.message || updateMessages[state.job.phase];
+            updateTimer = setTimeout(() => void refreshUpdate(), 2000);
+          } else if (check && state.available) {
+            updateStatus.textContent =
+              "可更新到 v" +
+              state.latest +
+              (state.enabled
+                ? "。升级时平台会短暂重启。"
+                : "。此部署需要先启用后台升级服务。");
+          } else if (check) {
+            updateStatus.textContent = "已是最新正式版本。";
+          } else if (state.job) {
+            updateStatus.textContent =
+              state.job.message || updateMessages[state.job.phase];
+          } else {
+            updateStatus.textContent = state.enabled
+              ? ""
+              : "此部署尚未启用后台升级服务。";
+          }
+          checkUpdate.disabled = Boolean(state.busy);
+          installUpdate.disabled = Boolean(state.busy);
+          if (!state.busy) updateJobId = "";
+        } catch (error) {
+          if (updateJobId && error.status === 401) {
+            updateJobId = "";
+            window.location.reload();
+          } else if (updateJobId) {
+            updateStatus.textContent = "正在等待平台重新连接…";
+            updateTimer = setTimeout(() => void refreshUpdate(), 2000);
+          } else {
+            updateStatus.textContent = error.message;
+            checkUpdate.disabled = false;
+          }
+        }
+      };
+      updatePanel.addEventListener("toggle", () => {
+        if (updatePanel.open && !updateJobId) void refreshUpdate();
+      });
+      checkUpdate.addEventListener("click", () => {
+        checkUpdate.disabled = true;
+        installUpdate.classList.add("hidden");
+        updateStatus.textContent = "正在检查更新…";
+        void refreshUpdate(true);
+      });
+      installUpdate.addEventListener("click", async () => {
+        if (
+          !offeredVersion ||
+          !window.confirm("升级到 v" + offeredVersion + "？平台会短暂重启。")
+        )
+          return;
+        checkUpdate.disabled = true;
+        installUpdate.disabled = true;
+        try {
+          const result = await api("/api/system/update", {
+            method: "POST",
+            body: JSON.stringify({ version: offeredVersion }),
+          });
+          updateJobId = result.id;
+          clearTimeout(updateTimer);
+          void refreshUpdate();
+        } catch (error) {
+          updateStatus.textContent = error.message;
+          checkUpdate.disabled = false;
+          installUpdate.disabled = false;
+        }
+      });
+      $("#adminPasswordForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = $("#saveAdminPassword");
+        if (button.disabled) return;
+        const errorNode = $("#adminPasswordError");
+        errorNode.textContent = "";
+        const newPassword = $("#newAdminPassword").value;
+        if (newPassword !== $("#confirmAdminPassword").value) {
+          errorNode.textContent = "两次输入的新密码不一致。";
+          $("#confirmAdminPassword").focus();
+          return;
+        }
+        button.disabled = true;
+        try {
+          await api("/api/settings/admin-password", {
+            method: "PUT",
+            body: JSON.stringify({
+              currentPassword: $("#currentAdminPassword").value,
+              newPassword,
+            }),
+          });
+          showAuth(false);
+          $("#authError").textContent = "";
+          $("#authDescription").textContent =
+            "管理员密码已修改，请使用新密码登录。";
+          $("#password").focus();
+        } catch (error) {
+          if (error.status === 401) {
+            showAuth(false);
+            $("#authError").textContent = "登录状态已失效，请重新登录。";
+          } else {
+            errorNode.textContent = error.message;
+          }
+        } finally {
+          button.disabled = false;
+        }
+      });
       $("#settingsForm").addEventListener("submit", async (event) => {
         event.preventDefault();
         const musicSources = [...$("#sourceList").children].map((row) => {
