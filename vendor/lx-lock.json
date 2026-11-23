@@ -1,0 +1,218 @@
+{
+  "desktop": {
+    "repository": "lyswhut/lx-music-desktop",
+    "commit": "323e4bac505da428adae8db6b58039fb2b36b86d",
+    "files": [
+      {
+        "path": "src/renderer/utils/musicSdk/mg/lyric.js",
+        "sha256": "dd0ff59adb1353d7dc6153f32b509d7068fc4aaaae650450e509960e19fc60c9"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/utils/mrc.js",
+        "sha256": "050739c68d198df88bd95fbd14cd4c1d1c8b4de549165ee8ede422e1ef3d76d3"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/musicInfo.js",
+        "sha256": "309bfa21c7ba593d328fc9a9eb2a2c3d36dba3f62516213db69edf09ad9f96bc"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/utils.js",
+        "sha256": "4521fb3c6c31fcac0a75113fb5d8ad11060e99bee34273a39a283fc4786410ad"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/utils/index.js",
+        "sha256": "eb6348563b3b167899159f175ca0a119c76265f7f626173d6756a459ac6cfbba"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/leaderboard.js",
+        "sha256": "fb6a471fbebef328601304ecd0d1699394d70effca43b0ef084467c9de313dcc"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/hotSearch.js",
+        "sha256": "6d964a99e391fcff1cf283bd3225b2564b6e344dfc14dbb222e41ea0372744b9"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/songList.js",
+        "sha256": "6e428ee44d8db7e1780987196d70184297b3c24c8a0619934ee9cf8689988ed2"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/mg/musicSearch.js",
+        "sha256": "6ee64a00ec653d2edbac48c01731b71660c2b767c57436d6783b674b330acf74"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/lyric.js",
+        "sha256": "46d3a399f48dc13836caacc254e666c5bb9313b6ea7e9686094532677a5629ac"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/utils/crypto.js",
+        "sha256": "c3f2440c297640715b719d559dac3e815cd1365720b15d38864f4bf25d4cb1d3"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/leaderboard.js",
+        "sha256": "6529a2349e20a7186311d47ca09b492e7cc644da33e36baa4c9cfbf20a9b9968"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/musicDetail.js",
+        "sha256": "43b9070b4e212c1848c5521e3fc993cd05bd786dc765e69f9e450e78d3f9db16"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/hotSearch.js",
+        "sha256": "600e624f4bb31c1c1b002bb3e4d28684f6089ed446bdd03d09d0464f813fa81a"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/utils/index.js",
+        "sha256": "d514baa5ce023e386dcf8815d10c14cc8bbce8a92ddaee74b0631db178fc8e10"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/songList.js",
+        "sha256": "e77c933de93f2ed3f8756a31a45ca09a500a5ee89e655cb1ea0b33ba7d84c9eb"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/wy/musicSearch.js",
+        "sha256": "6b3b3861749db43d9530164a24b3f34a0ab6ff8d69eea490f096ea0fcdf89168"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/lyric.js",
+        "sha256": "2cc4d8b80c948268923f75b0735ba3c7046a64c1202ef2079ff0ebbd24480cd5"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/qrcDecode.js",
+        "sha256": "4da31030898e30c7120e5d2346d615db61a20c72b3b039dcefa86c42efbb7fbb"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/musicInfo.js",
+        "sha256": "d4348e763437c98d1f6fff9a5e574cd6925b43676aa65ae6301d4b2d149201c0"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/leaderboard.js",
+        "sha256": "021cc5693232a11b2a1be878a50644cd3eec270e66eea7e4bd178f3bace1d30f"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/hotSearch.js",
+        "sha256": "1468008829e136116ce7aeb3b20697bc4bad38e82cd5f2c3fee12ab9cff77dd9"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/songList.js",
+        "sha256": "be4f564da09662ddc348c833c071da0ff6fe19f71bfb2b83d37bb95093503f6a"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/musicSearch.js",
+        "sha256": "a33f3096bb377bd978296b180142882d4bbe23609ed33956c1a371fd43e5d4b0"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/utils/index.js",
+        "sha256": "f3464e5d81845d6c140c1725b8d286519975bfe04692a877cb91c8b3c9d1ade6"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/tx/utils/crypto.js",
+        "sha256": "03fc378361b205f22852d6f3f0963fadcadbe0d5acbd2bb2b5ca33d621daf15b"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/lyric.js",
+        "sha256": "086c932d9097b1dc7ea67b4739617e371c8127d70f2b7d978491aee1f20ddcf4"
+      },
+      {
+        "path": "src/common/utils/lyricUtils/kg.js",
+        "sha256": "047286e90d0480a49bc6542c234c2e1a7504354c9da2f38ff5e6dfaf256f7ca5"
+      },
+      {
+        "path": "src/common/utils/lyricUtils/util.ts",
+        "sha256": "ecd1a0313a944a799f4a2bcb64fb0857efeba34f15b9b5330d8b1d010e1460b0"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/leaderboard.js",
+        "sha256": "203b4e729efb2e274603aa81c6e37a7fa77a55153bad126fdd590b30b52217c0"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/hotSearch.js",
+        "sha256": "0999b3c2e75ec306958fb83bc2caffcde9cb34fba31136eb0873d9d016261bdb"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/songList.js",
+        "sha256": "952f987797bae13926a80241e92c7f33c6427efdece248320962951d990e5ebb"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/util.js",
+        "sha256": "6b1c71fe38a25305f6cfec91f2d2d0085cd2d80c3b9461ac4be409a394fbd578"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/vendors/infSign.min.js",
+        "sha256": "f569256f68d0fbaab90869651251135f4b51a03fa2c2146269f6ef1c2d1fde20"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kg/musicSearch.js",
+        "sha256": "779a5a5601e9f8a7d323aacb339addd324cf26fa8bb06b45cc3c9f6b5f36a3ff"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/lyric.js",
+        "sha256": "a813c8692f7e34e10d71c2948505e929fe9ca0463afe92220f1cf6c04e564ab7"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/util.js",
+        "sha256": "34c662cc2d0f26ddaab66d7b02153d1ecb36b3e66de96be55e2912925c5a6cc6"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/leaderboard.js",
+        "sha256": "a331490e388f34cff93421d9c143dfcc6ee2fcf18c657802ad14aa66a88d3939"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/hotSearch.js",
+        "sha256": "722d706c0b5cd5d14da943c59541b3113cfe2ba64801c57c51d564d04b92e2f7"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/songList.js",
+        "sha256": "2f3cb4f8ef64f1149a08825fee576d8e6ef1edc8b5ae4da3fd135f35cd76101b"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/album.js",
+        "sha256": "8fa133d8a5438f90aa68efa744687045656efd34e5b3ca93d6db4d15eab92e4d"
+      },
+      {
+        "path": "src/renderer/utils/musicSdk/kw/musicSearch.js",
+        "sha256": "1dcd4b18614d63c663415966eee3278a71850f401344f9e5bce67e3a7f481daf"
+      }
+    ]
+  },
+  "player": {
+    "repository": "fly818/lxmusic-plugin-release",
+    "version": "3.8.0",
+    "manifest": {
+      "$schema": "https://raw.githubusercontent.com/songloft-org/plugin-toolchain/main/schemas/plugin.schema.json",
+      "name": "洛雪音源",
+      "version": "3.8.0",
+      "description": "洛雪音源 - 多平台音乐搜索、歌单管理、音源管理",
+      "author": "LX Team",
+      "homepage": "",
+      "license": "Apache-2.0",
+      "entryPath": "lxmusic",
+      "icon": "icon.27a432e2.svg",
+      "main": "main.jsc",
+      "minHostVersion": "2.6.0",
+      "permissions": [
+        "storage",
+        "songs.read",
+        "songs.write",
+        "playlists.read",
+        "playlists.write",
+        "jsenv",
+        "inter-plugin"
+      ],
+      "updateUrl": "https://raw.githubusercontent.com/fly818/mimusic-jsplugin-lxmusic/main/plugin.json",
+      "download_url": "",
+      "entryHash": "04279b96b3398da4157d1a095e0d938fe97d35c34ec3628a842d69df7bfe714f",
+      "zipHash": "28dddd7f865c2dbde17f9f0d7136a0c055ece34d2a0013a8d22e5e2233181d94"
+    },
+    "assets": [
+      {
+        "path": "static/js/app.bundle.7abaa0ce.js",
+        "upstreamSha256": "7abaa0ce5c9ae3a50a8ef9cf9a66a1d8823eee836b541360d2c54e2164664e5f",
+        "adaptedSha256": "aa0830f06a9a362e945a63b228de03496e5f9462492ca6db860acc43ea85d770"
+      },
+      {
+        "path": "static/css/style.e29031f6.css",
+        "upstreamSha256": "e29031f6ae940a466605f558c5cdf12dfa1c372fad515bc90bac4e70c87b1129",
+        "adaptedSha256": "e29031f6ae940a466605f558c5cdf12dfa1c372fad515bc90bac4e70c87b1129"
+      }
+    ]
+  }
+}

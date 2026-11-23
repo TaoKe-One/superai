@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>超级爱 · 播放器</title>
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="128x128"
+      href="/superai-icon.png"
+    />
+    <link rel="stylesheet" href="/lx/static/css/style.e29031f6.css" />
+    <link rel="stylesheet" href="/lx/platform.css" />
+    <script defer src="/lx/bridge.js"></script>
+    <script defer src="/lx/private-catalog.js"></script>
+    <script defer src="/lx/library.js"></script>
+    <script defer src="/lx/static/js/app.bundle.7abaa0ce.js"></script>
+  </head>
+  <body>
+    <header id="sp-lx-toolbar">
+      <span id="sp-lx-device">正在读取音箱状态…</span>
+      <div>
+        <select id="sp-lx-catalog" aria-label="检索来源" hidden>
+          <option value="private">私人音乐库</option>
+          <option value="online">LX 在线音乐</option>
+        </select>
+        <button id="sp-lx-library" hidden>我的音乐</button
+        ><button id="sp-lx-favorite">收藏当前</button
+        ><button id="sp-lx-sources" hidden>音乐源管理</button>
+      </div>
+    </header>
+    <div id="sp-lx-error" hidden>
+      <button id="sp-lx-error-close" type="button" aria-label="关闭错误提示">
+        ×
+      </button>
+      <p id="sp-lx-error-message" role="alert"></p>
+      <small id="sp-lx-error-countdown"></small>
+    </div>
+    <div id="app"></div>
+    <dialog id="sp-lx-dialog">
+      <div class="sp-dialog-head">
+        <h2 id="sp-lx-dialog-title">音乐源管理</h2>
+        <button id="sp-lx-close" aria-label="关闭">×</button>
+      </div>
+      <section id="sp-lx-dialog-body"></section>
+      <p id="sp-lx-dialog-error" role="alert"></p>
+    </dialog>
+  </body>
+</html>

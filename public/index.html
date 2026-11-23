@@ -1,0 +1,1999 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f6f5" />
+    <title>超级爱</title>
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="128x128"
+      href="/superai-icon.png"
+    />
+    <style>
+      :root {
+        font-family:
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+        color: #18211f;
+        background: #f4f6f5;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.48;
+        cursor: not-allowed;
+      }
+      .hidden,
+      [hidden] {
+        display: none !important;
+      }
+      .auth {
+        width: min(420px, calc(100% - 32px));
+        margin: 10vh auto;
+        background: #fff;
+        border: 1px solid #dce3df;
+        border-radius: 8px;
+        padding: 28px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .mark {
+        flex: none;
+      }
+      .auth h1 {
+        font-size: 22px;
+        margin: 30px 0 8px;
+      }
+      .muted {
+        color: #66736e;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .field {
+        display: grid;
+        gap: 7px;
+        margin: 18px 0;
+      }
+      .field label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #35413d;
+      }
+      .field input,
+      .field select {
+        width: 100%;
+        height: 42px;
+        border: 1px solid #ccd5d1;
+        border-radius: 5px;
+        padding: 0 11px;
+        background: #fff;
+        color: #18211f;
+        outline: none;
+      }
+      .field input:focus,
+      .field select:focus {
+        border-color: #14866a;
+        box-shadow: 0 0 0 3px #d9f2e9;
+      }
+      .btn {
+        min-height: 38px;
+        border: 1px solid #cbd5d0;
+        border-radius: 5px;
+        background: white;
+        color: #20312b;
+        padding: 0 13px;
+        font-weight: 600;
+      }
+      .btn:hover {
+        background: #f1f5f3;
+      }
+      .btn.primary {
+        background: #145c4b;
+        border-color: #145c4b;
+        color: white;
+      }
+      .btn.primary:hover {
+        background: #0e4d3e;
+      }
+      .btn.danger {
+        color: #a3352c;
+        border-color: #efc8c3;
+      }
+      .btn.icon {
+        width: 38px;
+        padding: 0;
+        font-size: 18px;
+      }
+      .app {
+        min-height: 100vh;
+      }
+      .topbar {
+        height: 62px;
+        background: #fff;
+        border-bottom: 1px solid #dce3df;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 max(24px, calc((100vw - 1240px) / 2));
+      }
+      .topbar .brand {
+        font-size: 16px;
+      }
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: #64716c;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #929c98;
+      }
+      .dot.good {
+        background: #15966c;
+      }
+      .layout {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 20px;
+      }
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-self: start;
+        position: sticky;
+        top: 20px;
+      }
+      .nav button {
+        border: 0;
+        background: transparent;
+        text-align: left;
+        padding: 11px 12px;
+        border-radius: 5px;
+        color: #53615b;
+        font-weight: 600;
+      }
+      .nav button.active {
+        background: #e4f1eb;
+        color: #145c4b;
+      }
+      .nav button:hover {
+        background: #edf2ef;
+      }
+      .content {
+        min-width: 0;
+      }
+      .view {
+        display: none;
+      }
+      .view.active {
+        display: block;
+      }
+      .page-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .page-head h1 {
+        font-size: 24px;
+        margin: 0 0 5px;
+        font-weight: 700;
+      }
+      .page-head p {
+        margin: 0;
+        color: #66736e;
+        font-size: 14px;
+      }
+      .main-panel {
+        background: #fff;
+        border: 1px solid #dce3df;
+        border-radius: 7px;
+        padding: 22px;
+      }
+      .assistant-log {
+        height: min(52vh, 500px);
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 2px 2px 18px;
+      }
+      .bubble {
+        max-width: min(76%, 620px);
+        padding: 12px 14px;
+        border-radius: 7px;
+        background: #f0f3f1;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .bubble.user {
+        align-self: flex-end;
+        background: #e2f1eb;
+      }
+      .bubble.assistant {
+        align-self: flex-start;
+      }
+      .bubble.error {
+        background: #fbebe8;
+        color: #852e26;
+      }
+      .bubble small {
+        display: block;
+        color: #66736e;
+        margin-top: 7px;
+        font-size: 12px;
+      }
+      .composer {
+        display: grid;
+        grid-template-columns: 1fr 94px;
+        gap: 10px;
+        border-top: 1px solid #e5eae7;
+        padding-top: 16px;
+      }
+      .composer input {
+        height: 46px;
+        border: 1px solid #cbd5d0;
+        border-radius: 5px;
+        padding: 0 13px;
+        min-width: 0;
+      }
+      .composer button {
+        height: 46px;
+      }
+      .suggestions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 14px 0 2px;
+      }
+      .suggestions button {
+        border: 1px solid #d8e0dc;
+        background: #fff;
+        border-radius: 20px;
+        color: #4d5b55;
+        padding: 7px 11px;
+        font-size: 13px;
+      }
+      .suggestions button:hover {
+        border-color: #76b59e;
+        color: #145c4b;
+      }
+      .section {
+        border-top: 1px solid #e5eae7;
+        padding: 20px 0;
+      }
+      .section:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .section h2 {
+        font-size: 16px;
+        margin: 0 0 13px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .row.spread {
+        justify-content: space-between;
+      }
+      .device-select {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: min(100%, 420px);
+      }
+      .device-select select {
+        flex: 1;
+        min-width: 180px;
+      }
+      .control-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .control-grid .btn {
+        height: 42px;
+      }
+      .range {
+        width: min(340px, 100%);
+        accent-color: #14866a;
+      }
+      .notice {
+        padding: 12px 14px;
+        border-radius: 5px;
+        background: #f6f3e8;
+        color: #66531a;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .source-list {
+        display: grid;
+        gap: 10px;
+      }
+      .source-row {
+        display: grid;
+        grid-template-columns:
+          minmax(110px, 0.8fr) minmax(180px, 1.6fr) minmax(120px, 0.9fr)
+          minmax(180px, 1.5fr) minmax(140px, 1fr) 70px 38px;
+        gap: 8px;
+        align-items: center;
+      }
+      .source-row input {
+        height: 38px;
+      }
+      .source-row .toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #53615b;
+      }
+      .source-key {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+      .source-key input,
+      .source-key button {
+        width: 100%;
+        min-width: 0;
+      }
+      .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 18px;
+      }
+      .empty {
+        padding: 24px;
+        text-align: center;
+        color: #77837e;
+        font-size: 14px;
+      }
+      .qr-wrap {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+      .qr-wrap img {
+        width: 180px;
+        height: 180px;
+        object-fit: contain;
+        border: 1px solid #dce3df;
+        border-radius: 5px;
+      }
+      .qr-wrap a {
+        color: #145c4b;
+      }
+      .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        padding: 12px 16px;
+        border-radius: 6px;
+        background: #18211f;
+        color: white;
+        box-shadow: 0 8px 24px #14221c24;
+        z-index: 4;
+      }
+      .toast.error {
+        background: #9e392f;
+      }
+      .candidate {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-top: 1px solid #e4e9e6;
+        padding: 10px 0;
+      }
+      .candidate:first-child {
+        border-top: 0;
+      }
+      .candidate.current {
+        background: #f4faf7;
+      }
+      .candidate-name {
+        font-weight: 600;
+      }
+      .candidate-meta {
+        font-size: 12px;
+        color: #68756f;
+        margin-top: 3px;
+      }
+      .footnote {
+        font-size: 12px;
+        color: #77837e;
+        line-height: 1.5;
+        margin-top: 12px;
+      }
+      @media (max-width: 760px) {
+        .topbar {
+          padding: 0 16px;
+        }
+        .layout {
+          display: block;
+          padding: 18px 14px;
+        }
+        .nav {
+          position: static;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          margin-bottom: 22px;
+        }
+        .nav button {
+          text-align: center;
+          padding: 10px 5px;
+          font-size: 13px;
+        }
+        .page-head h1 {
+          font-size: 21px;
+        }
+        .main-panel {
+          padding: 16px;
+        }
+        .assistant-log {
+          height: 47vh;
+        }
+        .bubble {
+          max-width: 92%;
+        }
+        .source-row {
+          grid-template-columns: 1fr 1fr;
+        }
+        .source-row input:nth-child(2) {
+          grid-column: 1/-1;
+          grid-row: 2;
+        }
+        .source-row select:nth-child(3) {
+          grid-column: 1/-1;
+          grid-row: 3;
+        }
+        .source-row input:nth-child(4) {
+          grid-column: 1/-1;
+          grid-row: 4;
+        }
+        .source-row .source-key {
+          grid-column: 1/-1;
+          grid-row: 5;
+        }
+        .source-row .toggle {
+          grid-column: 1;
+          grid-row: 6;
+        }
+        .source-row .remove {
+          grid-column: 2;
+          grid-row: 6;
+          justify-self: end;
+        }
+        .control-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .top-actions .status {
+          display: none;
+        }
+        .qr-wrap {
+          align-items: flex-start;
+        }
+      }
+
+      .library-config {
+        border: 1px solid #dce3df;
+        border-radius: 7px;
+        padding: 15px;
+        margin: 12px 0;
+      }
+      .library-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .library-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        font-size: 13px;
+      }
+      .library-field input,
+      .library-field select {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        border: 1px solid #ccd5d1;
+        border-radius: 5px;
+        padding: 0 9px;
+        background: #fff;
+      }
+      .library-field:has(input[type="url"]) {
+        grid-column: 1/-1;
+      }
+      .model-tools {
+        margin: 12px 0;
+      }
+      .model-tools select {
+        max-width: 100%;
+      }
+      .settings-actions {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        padding: 12px 0;
+      }
+      .source-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 12px;
+        border: 1px solid #dce3df;
+        border-radius: 5px;
+      }
+      .source-row input,
+      .source-row select {
+        min-width: 0;
+        width: 100%;
+        height: 38px;
+      }
+      .source-row .source-key {
+        grid-column: 1/-1;
+      }
+      details > summary {
+        cursor: pointer;
+        padding: 8px 0;
+        color: #53615b;
+      }
+      @media (max-width: 560px) {
+        .library-fields {
+          grid-template-columns: 1fr;
+        }
+        .model-tools .btn {
+          flex: 1;
+        }
+      }
+    </style>
+    <style>
+      .field label.toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+      .field label.toggle input {
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <style>
+      .main-panel h2 {
+        font-size: 17px;
+        margin: 0 0 6px;
+      }
+      .search-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .search-grid .main-panel {
+        min-width: 0;
+      }
+      .search-form {
+        grid-template-columns: minmax(0, 1fr) 82px;
+        margin: 14px 0 10px;
+      }
+      .track-row {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        border-top: 1px solid #e7ece9;
+        padding: 10px 0;
+      }
+      .track-cover {
+        width: 42px;
+        height: 42px;
+        border-radius: 5px;
+        background: #e7eee9;
+        object-fit: cover;
+        display: grid;
+        place-items: center;
+        color: #648071;
+      }
+      .track-info {
+        min-width: 0;
+      }
+      .track-info strong,
+      .track-info span {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .track-info span {
+        font-size: 12px;
+        color: #738079;
+        margin-top: 3px;
+      }
+      .track-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .track-actions .btn {
+        padding: 0 9px;
+        min-height: 34px;
+      }
+      .icon-btn {
+        border: 0;
+        background: transparent;
+        color: #718179;
+        padding: 5px;
+      }
+      .icon-btn.favorite {
+        color: #c2555a;
+      }
+      .track-index {
+        font-size: 12px;
+        color: #85918c;
+        text-align: center;
+      }
+      .empty {
+        border-top: 1px solid #e7ece9;
+      }
+      .candidate-meta {
+        overflow-wrap: anywhere;
+      }
+      .player-status-error {
+        color: #9e392f !important;
+      }
+      @media (max-width: 900px) {
+        .search-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 560px) {
+        .track-row {
+          grid-template-columns: 34px minmax(0, 1fr) auto;
+        }
+        .track-cover {
+          width: 34px;
+          height: 34px;
+        }
+        .track-actions {
+          gap: 2px;
+        }
+        .track-actions .btn {
+          padding: 0 6px;
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="auth" id="authView">
+      <div class="brand">
+        <img
+          class="mark"
+          src="/superai-icon.png"
+          width="36"
+          height="36"
+          alt=""
+        />
+        <span>超级爱</span>
+      </div>
+      <h1 id="authTitle">初始化管理账号</h1>
+      <p class="muted" id="authDescription">
+        先设置管理员密码，然后连接音箱并配置 AI 与音乐源。
+      </p>
+      <form id="authForm">
+        <div class="field">
+          <label for="password">管理员密码</label
+          ><input
+            id="password"
+            type="password"
+            minlength="12"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <button class="btn primary" id="authSubmit" type="submit">
+          创建账号
+        </button>
+      </form>
+      <p class="footnote" id="authError" role="alert"></p>
+    </section>
+
+    <div class="app hidden" id="appView">
+      <header class="topbar">
+        <div class="brand">
+          <img
+            class="mark"
+            src="/superai-icon.png"
+            width="36"
+            height="36"
+            alt=""
+          />
+          <span>超级爱</span>
+        </div>
+        <div class="top-actions">
+          <span class="status"
+            ><i class="dot" id="healthDot"></i
+            ><span id="healthText">检查连接</span></span
+          ><button class="btn" id="logoutButton" type="button">退出</button>
+        </div>
+      </header>
+      <div class="layout">
+        <nav class="nav" aria-label="主导航">
+          <button class="active" data-view="player">播放器</button>
+
+          <button data-view="assistant">AI 助手</button>
+          <button data-view="devices">音箱设备</button>
+          <button data-view="settings">平台设置</button>
+        </nav>
+        <main class="content">
+          <section class="view active" id="view-player">
+            <iframe
+              id="lxPlayer"
+              title="LX 音乐播放器"
+              style="
+                width: 100%;
+                height: calc(100dvh - 112px);
+                min-height: 520px;
+                border: 0;
+                border-radius: 10px;
+              "
+              allow="clipboard-write"
+            ></iframe>
+          </section>
+
+          <section class="view" id="view-search">
+            <div class="page-head">
+              <div>
+                <h1>搜索音乐</h1>
+                <p>搜索已配置音乐源的歌曲或歌单</p>
+              </div>
+            </div>
+            <div class="search-grid">
+              <section class="main-panel">
+                <h2>歌曲搜索</h2>
+                <form class="composer search-form" id="songSearchForm">
+                  <input
+                    id="songSearchInput"
+                    maxlength="200"
+                    placeholder="歌名、歌手，例如：周杰伦 晴天"
+                  /><button class="btn primary" type="submit">搜索</button>
+                </form>
+                <div id="songSearchResults">
+                  <div class="empty">输入歌名或歌手开始搜索。</div>
+                </div>
+              </section>
+              <section class="main-panel">
+                <h2>歌单搜索</h2>
+                <form class="composer search-form" id="playlistSearchForm">
+                  <input
+                    id="playlistSearchInput"
+                    maxlength="200"
+                    placeholder="输入歌单名称"
+                  /><button class="btn primary" type="submit">搜索</button>
+                </form>
+                <div id="playlistSearchResults">
+                  <div class="empty">歌单搜索要求音乐源配置了歌单接口。</div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" id="view-assistant">
+            <div class="page-head">
+              <div>
+                <h1>AI 助手</h1>
+                <p>自然语言点歌、设备控制与问题解答</p>
+              </div>
+              <button class="btn" id="clearChat" type="button">重置对话</button>
+            </div>
+            <div class="main-panel">
+              <div class="assistant-log" id="assistantLog" aria-live="polite">
+                <div class="bubble assistant">
+                  你好，可以直接说“周杰伦的晴天”，也可以问我一个问题。
+                </div>
+              </div>
+              <form class="composer" id="composer">
+                <input
+                  id="prompt"
+                  maxlength="2000"
+                  placeholder="输入点歌或问题…"
+                  autocomplete="off"
+                /><button class="btn primary" id="sendButton" type="submit">
+                  发送
+                </button>
+              </form>
+              <div class="suggestions">
+                <button type="button">周杰伦的晴天</button
+                ><button type="button">暂停播放</button
+                ><button type="button">介绍一下月球</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-devices">
+            <div class="page-head">
+              <div>
+                <h1>音箱设备</h1>
+                <p>连接小米账号并选择要控制的设备</p>
+              </div>
+            </div>
+            <div class="main-panel">
+              <section class="section">
+                <div class="row spread">
+                  <h2>小米账号</h2>
+                  <span class="status"
+                    ><i class="dot" id="miotDot"></i
+                    ><span id="miotText">未连接</span></span
+                  >
+                </div>
+                <div class="row">
+                  <button class="btn primary" id="qrButton" type="button">
+                    扫码连接账号</button
+                  ><button class="btn" id="refreshDevices" type="button">
+                    刷新设备</button
+                  ><button
+                    class="btn danger hidden"
+                    id="disconnectMi"
+                    type="button"
+                  >
+                    断开账号
+                  </button>
+                </div>
+                <div class="qr-wrap hidden" id="qrWrap">
+                  <img id="qrImage" alt="小米账号登录二维码" />
+                  <div>
+                    <p id="qrMessage" class="muted">
+                      请使用小米手机扫码，并在手机上确认登录。
+                    </p>
+                    <a
+                      class="hidden"
+                      id="qrLink"
+                      target="_blank"
+                      rel="noreferrer"
+                      >打开小米登录页</a
+                    >
+                    <div class="row" style="margin-top: 12px">
+                      <button class="btn" id="cancelQr" type="button">
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="section">
+                <h2>语音接管与诊断</h2>
+                <label class="row"
+                  ><input id="voiceMonitor" type="checkbox" /><span
+                    >监听账号下音箱的新对话，理解意图并执行平台任务</span
+                  ></label
+                >
+                <p class="footnote" id="voiceMonitorStatus">
+                  此功能默认关闭，需要已连接小米账号和带型号信息的音箱。
+                </p>
+                <p class="footnote">
+                  音乐请求会先尝试停止原生音乐，再自动选取最多三首匹配歌曲加入队列并播放；问答由平台处理。家电、红外、场景和提醒保留小爱原生处理，平台不重复控制或追加播报。当前读取的是云端对话记录，无法保证拦截小爱原生回答，也不代表持续录音。
+                </p>
+                <div id="voiceDiagnostics">
+                  <div class="row spread">
+                    <h3>处理记录</h3>
+                    <button class="btn" id="refreshVoice" type="button">
+                      刷新诊断
+                    </button>
+                  </div>
+                  <div id="voiceDevices"></div>
+                  <div id="voiceEvents" aria-live="polite"></div>
+                  <label for="voicePreviewText"
+                    >指令预览（只分析，不操作设备）</label
+                  >
+                  <input
+                    id="voicePreviewText"
+                    maxlength="2000"
+                    placeholder="打开空调，再播放周杰伦的晴天"
+                  />
+                  <button class="btn" id="previewVoice" type="button">
+                    分析指令
+                  </button>
+                  <p
+                    class="footnote"
+                    id="voicePreviewResult"
+                    style="white-space: pre-wrap"
+                  ></p>
+                </div>
+              </section>
+              <section class="section">
+                <h2>当前音箱</h2>
+                <div class="device-select">
+                  <select id="deviceSelect" aria-label="选择音箱">
+                    <option value="">没有可用设备</option></select
+                  ><button class="btn" id="chooseDevice" type="button">
+                    选择
+                  </button>
+                </div>
+                <div class="row spread" style="margin-top: 14px">
+                  <p class="muted" id="queueSummary">当前队列为空</p>
+                  <button class="btn" id="openPlayer" type="button">
+                    打开播放器
+                  </button>
+                </div>
+                <div id="queueList" aria-label="播放队列"></div>
+              </section>
+              <div class="notice">
+                小米云端接口可以下发播放和播报，但不能可靠阻止音箱先播放原生回答。完全接管语音仍取决于音箱固件或前置音频接入。
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-settings">
+            <div class="page-head">
+              <div>
+                <h1>平台设置</h1>
+                <p>配置 AI、联网能力与音乐服务</p>
+              </div>
+            </div>
+            <form class="main-panel" id="settingsForm">
+              <section class="section">
+                <h2>AI 模型</h2>
+                <div class="field">
+                  <label for="aiProvider">AI 厂商</label
+                  ><select id="aiProvider">
+                    <option value="custom">自定义兼容服务</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="aiBaseUrl">OpenAI 兼容 API 地址</label
+                  ><input
+                    id="aiBaseUrl"
+                    type="url"
+                    placeholder="https://api.example.com/v1"
+                  />
+                </div>
+                <div class="row model-tools">
+                  <button class="btn" id="fetchModels" type="button">
+                    获取模型列表</button
+                  ><button class="btn" id="testModel" type="button">
+                    测试模型</button
+                  ><button class="btn" id="testModelSearch" type="button">
+                    测试厂商联网
+                  </button>
+                </div>
+                <div class="field">
+                  <label for="aiModelList">可用模型列表</label
+                  ><select id="aiModelList">
+                    <option value="">获取后选择，也可手动填写</option>
+                  </select>
+                </div>
+                <p class="footnote" role="status" id="aiTestResult"></p>
+                <div class="field">
+                  <label for="aiModel">模型名称</label
+                  ><input
+                    id="aiModel"
+                    autocomplete="off"
+                    placeholder="model-name"
+                  />
+                </div>
+                <div class="field">
+                  <label for="aiKey">API 密钥</label
+                  ><input
+                    id="aiKey"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="留空以保留已保存的密钥"
+                  /><label class="toggle"
+                    ><input
+                      id="clearAiKey"
+                      type="checkbox"
+                    />清除已保存密钥</label
+                  >
+                </div>
+              </section>
+              <section class="section">
+                <h2>联网检索</h2>
+                <div class="field">
+                  <label for="searchMode">联网方式</label
+                  ><select id="searchMode">
+                    <option value="auto">
+                      自动：优先厂商内置搜索，必要时使用外部服务
+                    </option>
+                    <option value="off">关闭联网</option>
+                    <option value="external">使用外部搜索服务</option>
+                  </select>
+                </div>
+                <p class="footnote">
+                  按问题需要联网。OpenAI、百炼及部分 DeepSeek
+                  官方模型已适配内置搜索，仍取决于所选模型和账号；其他服务可选配外部搜索。未取得实时资料会明确提示。
+                </p>
+                <details>
+                  <summary>高级：外部搜索服务</summary>
+                  <div class="field">
+                    <label for="searchKey">Tavily API 密钥</label
+                    ><input
+                      id="searchKey"
+                      type="password"
+                      autocomplete="new-password"
+                      placeholder="可选；用于外部网页检索"
+                    /><label class="toggle"
+                      ><input
+                        id="clearSearchKey"
+                        type="checkbox"
+                      />清除已保存密钥</label
+                    >
+                  </div>
+                </details>
+              </section>
+              <section class="section">
+                <h2>音乐服务</h2>
+                <div class="field">
+                  <label for="musicServiceMode">音乐来源模式</label
+                  ><select id="musicServiceMode">
+                    <option value="online">仅 LX 在线音乐</option>
+                    <option value="private">
+                      仅私人音乐库（停用 LX 检索与解析）
+                    </option>
+                    <option value="hybrid">私人音乐库优先，LX 补充</option>
+                    <option value="legacy">LX + 高级兼容接口（旧配置）</option>
+                  </select>
+                </div>
+                <p class="footnote">
+                  同一来源规则用于播放器、语音点歌、歌单和收藏重播。私人库故障会提示错误，不自动改播在线版本。已有队列保留，当前模式不允许的歌曲无法再次起播。
+                </p>
+                <div class="field">
+                  <label for="gatewayBaseUrl">音箱可访问的平台地址</label
+                  ><input
+                    id="gatewayBaseUrl"
+                    type="url"
+                    placeholder="http://192.168.1.20:8787"
+                  /><span class="footnote"
+                    >填写部署机器的局域网 IP 和端口，音箱必须能访问。Docker
+                    请使用宿主机 IP 与映射端口；不要填写 127.0.0.1。</span
+                  >
+                </div>
+                <div class="row spread">
+                  <h2>私人音乐库</h2>
+                  <button class="btn" id="addLibrary" type="button">
+                    添加私人音乐库
+                  </button>
+                </div>
+                <div id="libraryConfigs"></div>
+                <p class="footnote">
+                  Subsonic/Navidrome 和飞牛直接读取目录。WebDAV
+                  保存后扫描，按文件标签与目录建立索引；文件夹作为虚拟歌单。飞牛填写完整直连地址，暂不支持裸
+                  FN ID。
+                </p>
+                <details>
+                  <summary>高级：HTTP JSON / topone 兼容接口</summary>
+                  <div class="row spread">
+                    <h2>兼容音乐源</h2>
+                    <button class="btn" id="addSource" type="button">
+                      添加音乐源
+                    </button>
+                  </div>
+                  <div class="source-list" id="sourceList"></div>
+                  <p class="footnote">
+                    音乐源使用固定 HTTP JSON 接口，不执行来源脚本。单曲接口返回
+                    tracks/results/data 曲目数组；需要歌单时另填歌单接口，返回
+                    tracks 数组或包含 playlists 的对象。
+                  </p>
+                </details>
+              </section>
+              <div class="settings-actions">
+                <button class="btn primary" type="submit">保存设置</button>
+              </div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div class="toast hidden" id="toast" role="status"></div>
+    <script type="module">
+      import { createQrLogin } from "/qr-login.js";
+      import { createVoicePanel } from "/voice.js";
+      import { createSettings } from "/settings.js";
+      const $ = (selector) => document.querySelector(selector);
+      let setupRequired = true;
+      let status = null;
+      let favoriteKeys = new Set();
+      let chatHistory = [];
+      let stateRefreshBusy = false;
+      const api = async (path, options = {}) => {
+        const response = await fetch(path, {
+          credentials: "same-origin",
+          ...options,
+          headers: {
+            "content-type": "application/json",
+            ...(options.headers || {}),
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(
+            payload.error || "请求失败，HTTP " + response.status,
+          );
+          error.status = response.status;
+          throw error;
+        }
+        return payload;
+      };
+      const toast = (message, error = false) => {
+        const node = $("#toast");
+        node.textContent = message;
+        node.classList.toggle("error", error);
+        node.classList.remove("hidden");
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => node.classList.add("hidden"), 3200);
+      };
+      const settings = createSettings({ api, toast });
+      const voicePanel = createVoicePanel({ api, toast });
+      const showAuth = (needsSetup) => {
+        qrLogin.cancel();
+        voicePanel.reset();
+        setupRequired = needsSetup;
+        $("#authView").classList.remove("hidden");
+        $("#appView").classList.add("hidden");
+        $("#lxPlayer").removeAttribute("src");
+        $("#authTitle").textContent = needsSetup
+          ? "初始化管理账号"
+          : "登录管理平台";
+        $("#authDescription").textContent = needsSetup
+          ? "设置管理员密码后，开始配置音箱和服务。"
+          : "请输入管理员密码继续。";
+        $("#authSubmit").textContent = needsSetup ? "创建账号" : "登录";
+        $("#password").minLength = needsSetup ? 12 : 1;
+      };
+      const loadStatus = async () => {
+        status = await api("/api/status");
+        $("#authView").classList.add("hidden");
+        $("#appView").classList.remove("hidden");
+        const playerFrame = $("#lxPlayer");
+        if (!playerFrame.getAttribute("src")) playerFrame.src = "/lx/";
+        else
+          playerFrame.contentWindow?.SpeakerLX?.configureCatalog(
+            status.musicServices,
+          );
+        $("#healthDot").classList.add("good");
+        $("#healthText").textContent = "平台已连接";
+        $("#miotDot").classList.toggle("good", status.xiaomiConnected);
+        $("#miotText").textContent = status.xiaomiConnected
+          ? "小米账号已连接"
+          : "未连接";
+        $("#disconnectMi").classList.toggle("hidden", !status.xiaomiConnected);
+        $("#voiceMonitor").checked = status.voiceMonitorEnabled;
+        void voicePanel.refresh();
+        renderDevices();
+        renderSettings();
+        await Promise.allSettled([refreshPlaybackState(), refreshLibrary()]);
+      };
+      const renderDevices = () => {
+        const select = $("#deviceSelect");
+        select.replaceChildren();
+        if (!status.devices.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "没有可用设备";
+          select.append(option);
+        }
+        for (const device of status.devices) {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent =
+            device.name + (device.model ? " · " + device.model : "");
+          option.selected = device.deviceId === status.selectedDeviceId;
+          select.append(option);
+        }
+        document
+          .querySelectorAll("#chooseDevice")
+          .forEach((button) => (button.disabled = !status.selectedDeviceId));
+        renderQueue();
+      };
+      const renderSettings = () => {
+        $("#aiBaseUrl").value = status.ai.baseUrl;
+        $("#aiModel").value = status.ai.model;
+        $("#clearAiKey").checked = false;
+        $("#clearSearchKey").checked = false;
+        $("#aiKey").placeholder = status.ai.keySet
+          ? "已保存密钥；留空则保留"
+          : "API 密钥";
+        $("#searchKey").placeholder = status.webSearch.keySet
+          ? "已保存密钥；留空则保留"
+          : "可选；用于外部搜索服务";
+        $("#sourceList").replaceChildren();
+        for (const source of status.musicSources) addSourceRow(source);
+        settings.render(status);
+      };
+      const addSourceRow = (source = {}) => {
+        const row = document.createElement("div");
+        row.className = "source-row";
+        const name = document.createElement("input");
+        name.placeholder = "名称";
+        name.value = source.name || "";
+        name.setAttribute("aria-label", "音乐源名称");
+        const endpoint = document.createElement("input");
+        endpoint.type = "url";
+        endpoint.placeholder = "https://music.example/search";
+        endpoint.value = source.endpoint || "";
+        endpoint.setAttribute("aria-label", "音乐源地址");
+        const key = document.createElement("input");
+        key.type = "password";
+        key.placeholder = source.keySet ? "已保存密钥" : "可选 API 密钥";
+        key.setAttribute("aria-label", "音乐源 API 密钥");
+        key.dataset.role = "source-key";
+        const keyClear = document.createElement("button");
+        keyClear.type = "button";
+        keyClear.className = "btn";
+        keyClear.textContent = "清除已保存密钥";
+        keyClear.hidden = !source.keySet;
+        keyClear.dataset.clearKey = "false";
+        keyClear.addEventListener("click", () => {
+          keyClear.dataset.clearKey =
+            keyClear.dataset.clearKey !== "true" ? "true" : "false";
+          keyClear.textContent =
+            keyClear.dataset.clearKey === "true"
+              ? "保存时清除密钥"
+              : "清除已保存密钥";
+        });
+        const keyField = document.createElement("div");
+        keyField.className = "source-key";
+        keyField.append(key, keyClear);
+        const toggleLabel = document.createElement("label");
+        toggleLabel.className = "toggle";
+        const toggle = document.createElement("input");
+        toggle.type = "checkbox";
+        toggle.checked = source.enabled !== false;
+        toggleLabel.append(toggle, document.createTextNode("启用"));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn icon remove";
+        remove.title = "移除音乐源";
+        remove.setAttribute("aria-label", "移除音乐源");
+        remove.textContent = "×";
+        remove.addEventListener("click", () => row.remove());
+        const protocol = document.createElement("select");
+        protocol.setAttribute("aria-label", "音乐源协议");
+        for (const [value, label] of [
+          ["http-json", "HTTP JSON"],
+          ["topone", "MIoT topone"],
+        ]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          protocol.append(option);
+        }
+        protocol.value = source.protocol || "http-json";
+        const playlistEndpoint = document.createElement("input");
+        playlistEndpoint.type = "url";
+        playlistEndpoint.placeholder = "可选歌单接口 URL";
+        playlistEndpoint.value = source.playlistEndpoint || "";
+        playlistEndpoint.setAttribute("aria-label", "歌单接口地址");
+        row.append(
+          name,
+          endpoint,
+          protocol,
+          playlistEndpoint,
+          keyField,
+          toggleLabel,
+          remove,
+        );
+        row.dataset.id = source.id || "";
+        row.dataset.keySet = source.keySet ? "true" : "false";
+        $("#sourceList").append(row);
+      };
+      const renderQueue = () => {
+        const queue = status?.playbackQueue;
+        const tracks = queue?.tracks || [];
+        const index = queue?.currentIndex ?? -1;
+        const summary = tracks.length
+          ? `当前队列${index >= 0 ? " · 正在播放《" + tracks[index].title + "》" : ""}`
+          : "当前队列为空";
+        $("#queueSummary").textContent = summary;
+        renderQueueInto($("#queueList"), tracks, index);
+      };
+      const renderQueueInto = (list, tracks, currentIndex) => {
+        list.replaceChildren();
+        if (!tracks.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "当前队列为空。";
+          list.append(empty);
+          return;
+        }
+        tracks.forEach((track, trackIndex) => {
+          const item = document.createElement("div");
+          item.className = "candidate";
+          item.classList.toggle("current", trackIndex === currentIndex);
+          const info = document.createElement("div");
+          const title = document.createElement("div");
+          title.className = "candidate-name";
+          title.textContent =
+            (trackIndex === currentIndex ? "正在播放 · " : "") + track.title;
+          const meta = document.createElement("div");
+          meta.className = "candidate-meta";
+          meta.textContent =
+            track.artist + (track.album ? " · " + track.album : "");
+          info.append(title, meta);
+          const play = document.createElement("button");
+          play.type = "button";
+          play.className = "btn";
+          play.textContent = "播放";
+          play.disabled = !status?.selectedDeviceId;
+          play.addEventListener("click", async () => {
+            try {
+              const result = await api("/api/music/queue/play", {
+                method: "POST",
+                body: JSON.stringify({
+                  index: trackIndex,
+                  id: track.id,
+                  sourceId: track.sourceId,
+                }),
+              });
+              status.playbackQueue = result.playbackQueue;
+              await refreshPlaybackState();
+              await refreshLibrary();
+              toast(result.message);
+            } catch (error) {
+              toast(error.message, true);
+            }
+          });
+          item.append(info, play);
+          list.append(item);
+        });
+      };
+      const refreshPlaybackState = async () => {
+        if (stateRefreshBusy || $("#appView").classList.contains("hidden"))
+          return;
+        stateRefreshBusy = true;
+        try {
+          const state = await api("/api/playback/state");
+          if (status) status.playbackQueue = state.playbackQueue;
+          renderQueue();
+        } catch (error) {
+          $("#queueSummary").textContent = error.message;
+        } finally {
+          stateRefreshBusy = false;
+        }
+      };
+      const renderTrackList = (
+        container,
+        tracks,
+        emptyText,
+        savedKind = "",
+      ) => {
+        container.replaceChildren();
+        if (!tracks.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = emptyText;
+          container.append(empty);
+          return;
+        }
+        tracks.forEach((track, index) => {
+          const row = document.createElement("div");
+          row.className = "track-row";
+          const number = document.createElement("span");
+          number.className = "track-index";
+          number.textContent = String(index + 1);
+          const info = document.createElement("div");
+          info.className = "track-info";
+          const title = document.createElement("strong");
+          title.textContent = track.title;
+          const meta = document.createElement("span");
+          meta.textContent =
+            track.artist + (track.album ? " · " + track.album : "");
+          info.append(title, meta);
+          const actions = document.createElement("div");
+          actions.className = "track-actions";
+          const play = document.createElement("button");
+          play.type = "button";
+          play.className = "btn";
+          play.textContent = savedKind ? "播放" : "▶";
+          play.setAttribute("aria-label", "播放 " + track.title);
+          play.disabled = !status?.selectedDeviceId;
+          play.addEventListener("click", async () => {
+            try {
+              if (savedKind) {
+                const response = await api("/api/music/library/play", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    kind: savedKind,
+                    id: track.id,
+                    sourceId: track.sourceId,
+                  }),
+                });
+                status.playbackQueue = response.playbackQueue;
+              } else {
+                const response = await api("/api/music/play", {
+                  method: "POST",
+                  body: JSON.stringify({ track }),
+                });
+                status.playbackQueue = response.playbackQueue;
+              }
+              await refreshPlaybackState();
+              await refreshLibrary();
+              toast("正在播放《" + track.title + "》");
+            } catch (error) {
+              toast(error.message, true);
+            }
+          });
+          actions.append(play);
+          if (!savedKind) {
+            const add = document.createElement("button");
+            add.type = "button";
+            add.className = "btn";
+            add.textContent = "+ 队列";
+            add.setAttribute("aria-label", "加入队列 " + track.title);
+            add.addEventListener("click", async () => {
+              try {
+                const response = await api("/api/music/queue/add", {
+                  method: "POST",
+                  body: JSON.stringify({ track }),
+                });
+                status.playbackQueue = response.playbackQueue;
+                renderQueue();
+                toast(response.added ? "已加入播放队列" : "没有可加入的歌曲");
+              } catch (error) {
+                toast(error.message, true);
+              }
+            });
+            actions.append(add);
+          }
+          const isFavorite =
+            savedKind === "favorites" || favoriteKeys.has(trackKey(track));
+          const favorite = document.createElement("button");
+          favorite.type = "button";
+          favorite.className = "icon-btn" + (isFavorite ? " favorite" : "");
+          favorite.textContent = isFavorite ? "♥" : "♡";
+          favorite.title = isFavorite ? "取消收藏" : "收藏歌曲";
+          favorite.setAttribute(
+            "aria-label",
+            favorite.title + "：" + track.title,
+          );
+          favorite.addEventListener("click", async () => {
+            try {
+              const payload = savedKind
+                ? { id: track.id, sourceId: track.sourceId }
+                : { track };
+              const response = await api("/api/music/favorites", {
+                method: "POST",
+                body: JSON.stringify(payload),
+              });
+              favoriteKeys[response.favorited ? "add" : "delete"](
+                trackKey(track),
+              );
+              updateFavoriteButtons();
+              await refreshLibrary();
+              toast(response.favorited ? "已加入收藏" : "已取消收藏");
+            } catch (error) {
+              toast(error.message, true);
+            }
+          });
+          favorite.dataset.trackKey = trackKey(track);
+          favorite.dataset.trackTitle = track.title;
+          actions.append(favorite);
+          row.append(number, info, actions);
+          container.append(row);
+        });
+      };
+      const refreshLibrary = async () => {
+        if (!status || $("#appView").classList.contains("hidden")) return;
+        try {
+          const favorites = await api("/api/music/favorites");
+          favoriteKeys = new Set(favorites.tracks.map(trackKey));
+          updateFavoriteButtons();
+        } catch (error) {
+          toast(error.message, true);
+        }
+      };
+      const trackKey = (track) => JSON.stringify([track.sourceId, track.id]);
+      const updateFavoriteButtons = () => {
+        document.querySelectorAll("[data-track-key]").forEach((button) => {
+          const selected = favoriteKeys.has(button.dataset.trackKey);
+          button.textContent = selected ? "♥" : "♡";
+          button.classList.toggle("favorite", selected);
+          button.title = selected ? "取消收藏" : "收藏歌曲";
+          button.setAttribute(
+            "aria-label",
+            button.title + "：" + button.dataset.trackTitle,
+          );
+        });
+      };
+      const addBubble = (text, role = "assistant", error = false) => {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble " + role + (error ? " error" : "");
+        bubble.textContent = text;
+        $("#assistantLog").append(bubble);
+        $("#assistantLog").scrollTop = $("#assistantLog").scrollHeight;
+        return bubble;
+      };
+      const renderAssistantResult = async (result, bubble) => {
+        bubble.textContent =
+          result.message || result.intent?.question || "已处理";
+        if (result.playbackQueue && status) {
+          status.playbackQueue = result.playbackQueue;
+          renderQueue();
+        }
+        if (result.playbackQueue) {
+          await refreshPlaybackState();
+          await refreshLibrary();
+        }
+        if (result.speechError) {
+          const note = document.createElement("small");
+          note.textContent = "音箱播报未完成：" + result.speechError;
+          bubble.append(note);
+        }
+        if (result.searchError) {
+          const note = document.createElement("small");
+          note.textContent =
+            "本次未取得可核实的联网资料：" + result.searchError;
+          bubble.append(note);
+        }
+        if (result.sources?.length) {
+          const note = document.createElement("small");
+          note.textContent = "参考来源：";
+          for (const source of result.sources) {
+            try {
+              const url = new URL(source.url);
+              if (
+                !["http:", "https:"].includes(url.protocol) ||
+                url.username ||
+                url.password
+              )
+                continue;
+              const link = document.createElement("a");
+              link.href = url.href;
+              link.textContent = source.title || url.hostname;
+              link.target = "_blank";
+              link.rel = "noopener noreferrer";
+              note.append(link, " ");
+            } catch {}
+          }
+          bubble.append(note);
+        }
+        const music = result.music;
+        const tracks =
+          music?.selection?.candidates?.map((item) => item.track) ||
+          music?.tracks?.slice(0, 4) ||
+          [];
+        if (tracks.length && result.intent?.action?.startsWith("play_")) {
+          for (const track of tracks.slice(0, 4)) {
+            const item = document.createElement("div");
+            item.className = "candidate";
+            const info = document.createElement("div");
+            const title = document.createElement("div");
+            title.className = "candidate-name";
+            title.textContent = track.title;
+            const meta = document.createElement("div");
+            meta.className = "candidate-meta";
+            meta.textContent =
+              track.artist + (track.album ? " · " + track.album : "");
+            info.append(title, meta);
+            const play = document.createElement("button");
+            play.type = "button";
+            play.className = "btn";
+            play.textContent = "播放";
+            play.addEventListener("click", async () => {
+              try {
+                const response = await api("/api/music/play", {
+                  method: "POST",
+                  body: JSON.stringify({ track }),
+                });
+                if (status) status.playbackQueue = response.playbackQueue;
+                renderQueue();
+                toast(response.message);
+              } catch (error) {
+                toast(error.message, true);
+              }
+            });
+            item.append(info, play);
+            bubble.append(item);
+          }
+        }
+      };
+      $("#authForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        $("#authError").textContent = "";
+        try {
+          await api(setupRequired ? "/api/setup" : "/api/login", {
+            method: "POST",
+            body: JSON.stringify({ password: $("#password").value }),
+          });
+          $("#password").value = "";
+          await loadStatus();
+        } catch (error) {
+          $("#authError").textContent = error.message;
+        }
+      });
+      $("#logoutButton").addEventListener("click", async () => {
+        qrLogin.cancel();
+        await api("/api/logout", { method: "POST", body: "{}" });
+        showAuth(false);
+      });
+      document.querySelectorAll(".nav button").forEach((button) =>
+        button.addEventListener("click", () => {
+          document
+            .querySelectorAll(".nav button")
+            .forEach((item) =>
+              item.classList.toggle("active", item === button),
+            );
+          document
+            .querySelectorAll(".view")
+            .forEach((view) =>
+              view.classList.toggle(
+                "active",
+                view.id === "view-" + button.dataset.view,
+              ),
+            );
+          if (button.dataset.view === "player") refreshPlaybackState();
+        }),
+      );
+      const showSearchMessage = (selector, message, error = false) => {
+        const node = $(selector);
+        node.replaceChildren();
+        const item = document.createElement("div");
+        item.className = error ? "empty player-status-error" : "empty";
+        item.textContent = message;
+        node.append(item);
+      };
+      const renderSourceErrors = (container, errors = []) => {
+        if (!errors.length) return;
+        const note = document.createElement("p");
+        note.className = "footnote player-status-error";
+        note.textContent =
+          "部分音乐源不可用：" +
+          errors
+            .map((item) => item.sourceId + "（" + item.message + "）")
+            .join("；");
+        container.append(note);
+      };
+      $("#songSearchForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const query = $("#songSearchInput").value.trim();
+        if (!query) return;
+        const button = event.submitter;
+        if (button) button.disabled = true;
+        showSearchMessage("#songSearchResults", "正在搜索音乐源…");
+        try {
+          const result = await api("/api/music/search", {
+            method: "POST",
+            body: JSON.stringify({ query }),
+          });
+          renderTrackList(
+            $("#songSearchResults"),
+            result.tracks,
+            "没有找到匹配歌曲。",
+          );
+          renderSourceErrors($("#songSearchResults"), result.sourceErrors);
+        } catch (error) {
+          showSearchMessage("#songSearchResults", error.message, true);
+        } finally {
+          if (button) button.disabled = false;
+        }
+      });
+      let searchedPlaylistName = "";
+      $("#playlistSearchForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const name = $("#playlistSearchInput").value.trim();
+        if (!name) return;
+        searchedPlaylistName = name;
+        const button = event.submitter;
+        if (button) button.disabled = true;
+        showSearchMessage("#playlistSearchResults", "正在搜索歌单…");
+        try {
+          const result = await api("/api/music/playlist/search", {
+            method: "POST",
+            body: JSON.stringify({ name }),
+          });
+          const container = $("#playlistSearchResults");
+          renderTrackList(
+            container,
+            result.tracks,
+            "没有找到歌单曲目，请检查音乐源的歌单接口。",
+          );
+          renderSourceErrors(container, result.sourceErrors);
+          if (result.tracks.length) {
+            const playAll = document.createElement("button");
+            playAll.type = "button";
+            playAll.className = "btn primary";
+            playAll.textContent =
+              "播放整个歌单（" + result.tracks.length + " 首）";
+            playAll.addEventListener("click", async () => {
+              try {
+                const played = await api("/api/music/playlist/play", {
+                  method: "POST",
+                  body: JSON.stringify({ name: searchedPlaylistName }),
+                });
+                if (status) status.playbackQueue = played.playbackQueue;
+                await refreshPlaybackState();
+                await refreshLibrary();
+                toast(played.message || "正在播放歌单");
+              } catch (error) {
+                toast(error.message, true);
+              }
+            });
+            container.prepend(playAll);
+          }
+        } catch (error) {
+          showSearchMessage("#playlistSearchResults", error.message, true);
+        } finally {
+          if (button) button.disabled = false;
+        }
+      });
+      $("#openPlayer").addEventListener("click", () =>
+        document.querySelector('[data-view="player"]').click(),
+      );
+      document.querySelectorAll(".suggestions button").forEach((button) =>
+        button.addEventListener("click", () => {
+          $("#prompt").value = button.textContent;
+          $("#prompt").focus();
+        }),
+      );
+      $("#composer").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const text = $("#prompt").value.trim();
+        if (!text) return;
+        $("#prompt").value = "";
+        addBubble(text, "user");
+        const reply = addBubble("正在处理…");
+        $("#sendButton").disabled = true;
+        try {
+          const result = await api("/api/assistant/command", {
+            method: "POST",
+            body: JSON.stringify({ text, history: chatHistory.slice(-12) }),
+          });
+          await renderAssistantResult(result, reply);
+          chatHistory.push(
+            { role: "user", content: text },
+            { role: "assistant", content: result.message || "已处理" },
+          );
+          chatHistory = chatHistory.slice(-12);
+        } catch (error) {
+          reply.textContent = error.message;
+          reply.classList.add("error");
+        } finally {
+          $("#sendButton").disabled = false;
+        }
+      });
+      $("#clearChat").addEventListener("click", () => {
+        chatHistory = [];
+        $("#assistantLog").replaceChildren();
+        addBubble("对话已重置，可以重新开始。");
+      });
+      const qrLogin = createQrLogin({
+        request: api,
+        onState(data) {
+          $("#qrButton").disabled = data.state === "creating";
+          $("#qrButton").textContent =
+            data.state === "creating"
+              ? "正在生成…"
+              : data.state === "waiting" || data.state === "expired"
+                ? "重新生成二维码"
+                : "扫码连接账号";
+          $("#qrWrap").classList.toggle(
+            "hidden",
+            ["connected", "cancelled", "creating"].includes(data.state),
+          );
+          if (data.state !== "waiting") {
+            $("#qrImage").removeAttribute("src");
+            $("#qrImage").classList.add("hidden");
+            $("#qrLink").removeAttribute("href");
+            $("#qrLink").classList.add("hidden");
+          }
+          if (data.qrImageUrl) {
+            $("#qrImage").src = data.qrImageUrl;
+            $("#qrImage").classList.remove("hidden");
+          }
+          if (data.loginUrl) {
+            $("#qrLink").href = data.loginUrl;
+            $("#qrLink").classList.remove("hidden");
+          }
+          if (data.message) $("#qrMessage").textContent = data.message;
+        },
+        async onConnected(isCurrent) {
+          await loadStatus();
+          if (!isCurrent()) return;
+          toast("小米账号已连接，正在读取音箱设备…");
+          try {
+            await api("/api/miot/devices/refresh", {
+              method: "POST",
+              body: "{}",
+            });
+            if (isCurrent()) {
+              await loadStatus();
+              if (isCurrent())
+                toast(
+                  status.devices.length
+                    ? "小米账号已连接，已发现 " +
+                        status.devices.length +
+                        " 台设备"
+                    : "小米账号已连接，暂未发现音箱，请确认绑定账号后刷新设备",
+                );
+            }
+          } catch (error) {
+            if (isCurrent())
+              toast(
+                "账号已连接，但读取设备失败：" +
+                  error.message +
+                  "；请点击刷新设备重试",
+                true,
+              );
+          }
+        },
+        onError(error) {
+          toast(error.message, true);
+          if (error.status === 401) showAuth(false);
+        },
+      });
+      $("#qrButton").addEventListener("click", () => qrLogin.start());
+      $("#cancelQr").addEventListener("click", () => qrLogin.cancel());
+      $("#refreshDevices").addEventListener("click", async () => {
+        try {
+          status.devices = (
+            await api("/api/miot/devices/refresh", {
+              method: "POST",
+              body: "{}",
+            })
+          ).devices;
+          status.selectedDeviceId =
+            status.devices[0]?.deviceId || status.selectedDeviceId;
+          await loadStatus();
+          toast("设备列表已刷新");
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+      $("#disconnectMi").addEventListener("click", async () => {
+        qrLogin.cancel();
+        try {
+          await api("/api/miot/disconnect", { method: "POST", body: "{}" });
+          await loadStatus();
+          toast("小米账号已断开");
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+      $("#voiceMonitor").addEventListener("change", async () => {
+        const enabled = $("#voiceMonitor").checked;
+        try {
+          const result = await api("/api/voice/monitor", {
+            method: "PUT",
+            body: JSON.stringify({ enabled }),
+          });
+          status.voiceMonitorEnabled = result.enabled;
+          status.voiceMonitorActive = result.active;
+          await voicePanel.refresh();
+        } catch (error) {
+          $("#voiceMonitor").checked = !enabled;
+          toast(error.message, true);
+        }
+      });
+      $("#chooseDevice").addEventListener("click", async () => {
+        try {
+          await api("/api/miot/device", {
+            method: "PUT",
+            body: JSON.stringify({ deviceId: $("#deviceSelect").value }),
+          });
+          status.selectedDeviceId = $("#deviceSelect").value;
+          renderDevices();
+          await refreshPlaybackState();
+          toast("已切换音箱");
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+      $("#addSource").addEventListener("click", () => addSourceRow());
+      $("#settingsForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const musicSources = [...$("#sourceList").children].map((row) => {
+          const fields = row.children;
+          const key = fields[4].querySelector('[data-role="source-key"]');
+          const clearKey = fields[4].querySelector("button");
+          return {
+            id: row.dataset.id,
+            name: fields[0].value,
+            endpoint: fields[1].value,
+            protocol: fields[2].value,
+            playlistEndpoint: fields[3].value,
+            apiKey: key.value,
+            clearApiKey: clearKey.dataset.clearKey === "true",
+            enabled: fields[5].querySelector("input").checked,
+          };
+        });
+        try {
+          await api("/api/settings", {
+            method: "PUT",
+            body: JSON.stringify({
+              ...settings.values(),
+              musicSources,
+            }),
+          });
+          $("#aiKey").value = "";
+          $("#searchKey").value = "";
+          await loadStatus();
+          toast("设置已保存");
+        } catch (error) {
+          toast(error.message, true);
+        }
+      });
+      $("#refreshDevices").disabled = false;
+      (async () => {
+        try {
+          const result = await api("/api/setup/status");
+          if (result.setupRequired) showAuth(true);
+          else {
+            showAuth(false);
+            try {
+              await loadStatus();
+            } catch (error) {
+              showAuth(false);
+              if (error.message === "authentication_required")
+                toast("登录状态已失效，请重新登录。", true);
+            }
+          }
+        } catch {
+          showAuth(true);
+        }
+      })();
+      setInterval(() => {
+        if (
+          !document.hidden &&
+          !$("#appView").classList.contains("hidden") &&
+          $("#view-devices").classList.contains("active")
+        )
+          void voicePanel.refresh();
+        if (
+          !$("#appView").classList.contains("hidden") &&
+          !$("#view-player").classList.contains("active")
+        )
+          refreshPlaybackState();
+      }, 3000);
+    </script>
+  </body>
+</html>

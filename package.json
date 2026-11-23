@@ -1,0 +1,24 @@
+{
+  "name": "superai",
+  "version": "0.1.0",
+  "description": "Self-hosted web player and voice integration for Xiaomi speakers",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "node --experimental-strip-types --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.12.1",
+    "music-metadata": "12.7.0",
+    "quickjs-emscripten": "0.32.0"
+  },
+  "devDependencies": {
+    "prettier": "3.10.1"
+  }
+}

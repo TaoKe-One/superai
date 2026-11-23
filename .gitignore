@@ -1,0 +1,10 @@
+node_modules/
+!/package-lock.json
+data/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+LESSONS*.md
+VERIFICATION*.md
