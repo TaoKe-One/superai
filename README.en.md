@@ -1,6 +1,6 @@
 # 超级爱 (superai)
 
-[简体中文](README.md) · [Deployment configuration](docs/deployment.en.md) · [Apache-2.0](LICENSE) · [Live preview](https://taoke-one.github.io/superai/)
+[简体中文](README.md) · [User guide](docs/index.en.md) · [Online guide](https://taoke-one.github.io/superai/guide/en/) · [Deployment configuration](docs/deployment.en.md) · [Apache-2.0](LICENSE) · [Live preview](https://taoke-one.github.io/superai/)
 
 A self-hosted web player and voice assistant for Xiaomi speakers. Play music in your browser, cast it to a speaker, or ask XiaoAi to play music and answer questions. The platform runs on Docker or Node.js.
 
@@ -23,7 +23,7 @@ These screenshots show the running SuperAI app with sample data. The read-only p
 
 ## Deploy
 
-Choose one deployment method. Both default to [http://localhost:8787](http://localhost:8787).
+Choose one deployment method. After setup, open [http://localhost:8787](http://localhost:8787) on the deployment host.
 
 ### Option 1 — Docker image
 
@@ -31,13 +31,13 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
-  -p 127.0.0.1:8787:8787 -v superai-data:/data \
+  -p 8787:8787 -v superai-data:/data \
   taokeone/superai:0.1.1
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. Both registries provide `0.1.1` and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
 
-The command above makes the site available on the deployment host. For access from other devices on the same LAN, finish administrator setup and change `-p 127.0.0.1:8787:8787` to `-p 192.168.1.10:8787:8787`, using the deployment host's LAN IP. See [LAN access](docs/deployment.en.md#lan-access) for an existing container.
+`-p 8787:8787` publishes the port on all host interfaces. For LAN access, open `http://<host-LAN-IP>:8787` from another device. For host-only access, use `-p 127.0.0.1:8787:8787`. To change the binding for an existing container, recreate it with its original data volume. [LAN access](docs/deployment.en.md#lan-access)
 
 You can also pull from GitHub or use the same reference in the run command above.
 
@@ -45,11 +45,35 @@ You can also pull from GitHub or use the same reference in the run command above
 docker pull ghcr.io/taoke-one/superai:0.1.1
 ```
 
-For source builds or pulling the image into an existing Compose project, see the [deployment guide](docs/deployment.en.md).
+### Option 2 — Docker Compose
 
-### Option 2 — Command line
+Create `compose.yaml` in your deployment directory with the following contents.
 
-Download or clone the project and run the commands in its root directory. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`.
+```yaml
+services:
+  superai:
+    image: taokeone/superai:0.1.1
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - speaker-data:/data
+
+volumes:
+  speaker-data:
+```
+
+Run this in the same directory.
+
+```bash
+docker compose up -d
+```
+
+You can also set `image` to `ghcr.io/taoke-one/superai:0.1.1`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
+
+### Option 3 — Command line
+
+Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
 
 ```bash
 cp .env.example .env
@@ -61,12 +85,22 @@ Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persiste
 
 For LAN access, reverse proxies, or signed audio URL redirects, see the [deployment guide](docs/deployment.en.md).
 
+GitHub-generated source archives include `test/` for development and CI. If you have a separately distributed `*-deploy.zip`, extract it and follow the same steps. Deployment ZIPs and Docker images exclude test files.
+
+### One-click upgrades in Settings
+
+Open **Settings → System Update** to check for stable GitHub releases. With `docker run`, first deploy an image that supports one-click upgrades and start the separate updater container. Then **Upgrade Now** downloads and switches the image while keeping the port mappings and data volume. The app restarts briefly, and you need to sign in again. If the new container fails its health check, the updater restores the previous container and configuration. [Setup steps](docs/deployment.en.md#one-click-upgrades-in-settings)
+
+One-click upgrades are currently available in the development version. Update the public v0.1.1 release, Docker Compose deployments, and Node.js deployments manually using the corresponding steps. [Deployment and updates](docs/deployment.en.md)
+
 ## First run
 
-1. Open the admin page and create a password with at least 12 characters.
+1. Open the admin page and follow the prompts to create an administrator password.
 2. Connect a private library under Music Services in settings, or import an LX source script you have permission to use in the player's Music Sources panel. The online catalog and playback sources are configured separately.
 3. Go to Speaker Devices, scan the Xiaomi sign-in QR code, and select a speaker. Skip this step for browser playback. To cast a private library track, enter a platform LAN address the speaker can reach in Music Services.
 4. For voice requests, test and save a model under AI Models in settings, then enable conversation monitoring in Speaker Devices. Try asking XiaoAi to play a song or explain how tides work.
+
+In the development version, open the password panel in Settings and enter your current password and a new one of at least five characters. Sign in again on each device with the new password after saving. The public v0.1.1 release provides a password recovery command inside the container. [v0.1.1 release notes](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
 
 ## Speaker compatibility
 

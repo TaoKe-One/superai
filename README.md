@@ -1,6 +1,6 @@
 # 超级爱（superai）
 
-[English](README.en.md) · [部署配置](docs/deployment.md) · [Apache-2.0](LICENSE) · [在线预览](https://taoke-one.github.io/superai/)
+[English](README.en.md) · [使用手册](docs/index.md) · [在线手册](https://taoke-one.github.io/superai/guide/) · [部署配置](docs/deployment.md) · [Apache-2.0](LICENSE) · [在线预览](https://taoke-one.github.io/superai/)
 
 自托管网页播放器和小爱音箱助手。用浏览器播放音乐、投放到音箱，或直接对小爱说出点歌和问答请求。平台独立运行，部署时只需要 Docker 或 Node.js。
 
@@ -23,7 +23,7 @@
 
 ## 部署
 
-两种部署方式任选一种，默认在本机通过 [http://localhost:8787](http://localhost:8787) 访问。
+任选一种部署方式。部署完成后，可在部署机上打开 [http://localhost:8787](http://localhost:8787)。
 
 ### 方式一：Docker 镜像
 
@@ -31,13 +31,13 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
-  -p 127.0.0.1:8787:8787 -v superai-data:/data \
+  -p 8787:8787 -v superai-data:/data \
   taokeone/superai:0.1.1
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供 `0.1.1` 和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
 
-上面的命令只允许部署机访问。要让同一局域网的手机或电脑打开页面，初始化管理员后，把 `-p 127.0.0.1:8787:8787` 改成 `-p 192.168.1.10:8787:8787`，其中 `192.168.1.10` 换成部署机的局域网 IP。已有容器请参考[局域网访问](docs/deployment.md#局域网访问)。
+`-p 8787:8787` 将端口发布到宿主机的所有接口。局域网设备用 `http://<部署机局域网IP>:8787` 访问，只允许本机访问时用 `-p 127.0.0.1:8787:8787`。已有容器需要沿用原数据卷重新创建，才能更改端口绑定。[局域网访问](docs/deployment.md#局域网访问)
 
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
@@ -45,11 +45,35 @@ docker run -d --name superai --restart unless-stopped \
 docker pull ghcr.io/taoke-one/superai:0.1.1
 ```
 
-也可以克隆项目后从源码构建，或在现有 Compose 项目中直接拉取镜像。详见[部署配置](docs/deployment.md)。
+### 方式二：Docker Compose
 
-### 方式二：命令行
+在部署目录创建 `compose.yaml`，填入以下内容。
 
-下载或克隆项目，在项目根目录执行下面的命令。安装 Node.js 22.6+（建议使用受支持的 Node.js LTS 版本）和 npm。使用需要转码的 WebDAV 音频时，还需要安装 FFmpeg 并将其加入 `PATH`。
+```yaml
+services:
+  superai:
+    image: taokeone/superai:0.1.1
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - speaker-data:/data
+
+volumes:
+  speaker-data:
+```
+
+在同一目录执行。
+
+```bash
+docker compose up -d
+```
+
+也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.1`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
+
+### 方式三：命令行
+
+从 GitHub Releases 下载所需版本的 **Source code**，或克隆仓库，然后在项目根目录执行下面的命令。安装 Node.js 22.6+（建议使用受支持的 Node.js LTS 版本）和 npm。使用需要转码的 WebDAV 音频时，还需要安装 FFmpeg 并将其加入 `PATH`。[正式版本](https://github.com/TaoKe-One/superai/releases)
 
 ```bash
 cp .env.example .env
@@ -61,12 +85,22 @@ npm start
 
 需要局域网访问、反向代理或签名音频地址转跳时，见[部署配置](docs/deployment.md)。
 
+GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。若拿到单独分发的 `*-deploy.zip`，解压后也可按上面步骤部署。部署 ZIP 和 Docker 镜像均已排除测试文件。
+
+### 后台一键升级
+
+在「**平台设置 → 系统更新**」检查 GitHub 正式版本。用 `docker run` 部署时，首次需要换到支持一键升级的镜像，并启动独立的升级容器。此后点「立即升级」即可下载新镜像并切换，保留原端口映射和数据卷。切换时平台会短暂重启，需要重新登录。新容器健康检查失败时会自动恢复旧容器和原配置。[启用步骤](docs/deployment.md#后台一键升级)
+
+一键升级目前在开发版中提供。公开的 v0.1.1、Docker Compose 和 Node.js 命令行部署均通过各自的方式手动更新。[部署与更新说明](docs/deployment.md)
+
 ## 第一次使用
 
-1. 打开管理页面，创建至少 12 个字符的管理员密码。
+1. 打开管理页面，按页面提示创建管理员密码。
 2. 打开「平台设置 → 音乐服务」，接入已有私人曲库，或者在播放器的「音乐源管理」导入你有权使用的 LX 音源脚本。在线目录与可播放音源分别配置。
 3. 到「音箱设备」扫描小米登录二维码，选择音箱。浏览器播放可跳过这一步。投放私人曲库时，在音乐服务中填写音箱能访问的平台局域网地址。
 4. 如需语音助手，先到「平台设置 → AI 模型」测试并保存模型，再到「音箱设备 → 语音接管与诊断」开启监听。可以对音箱说「播放周杰伦的晴天」或「帮我解释一下潮汐是怎么形成的」。
+
+开发版可在「平台设置 → 修改管理员密码」验证当前密码并设置至少 5 个字符的新密码。保存后需要在各设备上用新密码重新登录。公开的 v0.1.1 提供容器内密码恢复命令。[v0.1.1 发布说明](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
 
 ## 音箱兼容性
 

@@ -1,12 +1,13 @@
-name: Publish preview
+name: Publish documentation and preview
 
 on:
   push:
     branches: [main]
     paths:
       - "demo/**"
-      - "docs/previews/**"
+      - "docs/**"
       - "public/superai-icon.png"
+      - "scripts/build-guide.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -31,13 +32,22 @@ jobs:
           preview_dir="_site/view/$revision"
           mkdir -p "$preview_dir/previews" _site/previews
 
-          cp demo/index.html demo/style.css public/superai-icon.png "$preview_dir/"
+          cp demo/style.css public/superai-icon.png "$preview_dir/"
+          sed 's#\./guide/#../../guide/#g' demo/index.html > "$preview_dir/index.html"
           cp "${screenshots[@]}" "$preview_dir/previews/"
           sed -E "s#\./(style\.css|superai-icon\.png|previews/)#./view/$revision/\1#g" demo/index.html > _site/index.html
 
           # Keep the asset URLs in previously cached versions of the root page readable.
           cp demo/style.css public/superai-icon.png _site/
           cp "${screenshots[@]}" _site/previews/
+
+          # Preserve the preview URLs used by the previous public homepage.
+          cp -R "$preview_dir" _site/view/75dddf1f24cb
+      - name: Build the user guide
+        run: |
+          python3 -m venv "$RUNNER_TEMP/guide-venv"
+          "$RUNNER_TEMP/guide-venv/bin/python" -m pip install 'Markdown==3.10.3'
+          "$RUNNER_TEMP/guide-venv/bin/python" scripts/build-guide.py _site
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: _site

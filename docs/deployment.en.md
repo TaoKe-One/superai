@@ -1,20 +1,104 @@
 # Deployment configuration
 
-[简体中文](deployment.md) · [Project home](../README.en.md)
+[简体中文](deployment.md) · [User guide](index.en.md)
+
+## Docker
+
+The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Docker selects the matching architecture automatically. ARM devices need a 64-bit operating system.
+
+```bash
+docker run -d --name superai --restart unless-stopped \
+  -p 8787:8787 -v superai-data:/data \
+  taokeone/superai:0.1.1
+```
+
+Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+
+`-p 8787:8787` publishes the port on all host interfaces. For LAN access, open `http://<host-LAN-IP>:8787` from another device. For host-only access, use `-p 127.0.0.1:8787:8787`. To change the binding for an existing container, recreate it with its original data volume. [LAN access](#lan-access)
+
+You can also pull from GitHub or use the same reference in the run command above.
+
+```bash
+docker pull ghcr.io/taoke-one/superai:0.1.1
+```
 
 ## Docker Compose
 
-Run this in the project root to pull the image from Docker Hub. For an existing installation, use the same Compose project so the service keeps its `speaker-data` volume.
+Create `compose.yaml` in your deployment directory with the following contents.
+
+```yaml
+services:
+  superai:
+    image: taokeone/superai:0.1.1
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - speaker-data:/data
+
+volumes:
+  speaker-data:
+```
+
+Run this in the same directory.
 
 ```bash
-SUPERAI_IMAGE=taokeone/superai:0.1.1 docker compose up -d --no-build --pull always
+docker compose up -d
+```
+
+To use the Compose file included in the repository, run this in the project root. Existing installations should keep the same Compose project and data volume.
+
+```bash
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.1 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
 
+## Node.js command line
+
+Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
+
+```bash
+cp .env.example .env
+npm ci --omit=dev
+npm start
+```
+
+Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. After updating the source, reinstall dependencies and restart the process.
+
+GitHub-generated source archives include `test/` for development and CI. If you have a separately distributed `*-deploy.zip`, extract it and follow the same steps. Deployment ZIPs and Docker images exclude test files.
+
+## One-click upgrades in Settings
+
+Open **Settings → System Update** to check for stable GitHub releases. With a `docker run` deployment, an optional updater container enables the upgrade button. Start with an official image that includes the updater. The updater downloads the image for your architecture before switching containers and reuses the original ports and data volume. Expect a short restart and sign in again afterward. If the new container fails its health check, the updater restores the previous container and configuration.
+
+One-click upgrades are available in the development version. Update existing public v0.1.1 installations using their deployment instructions.
+
+Set `SUPERAI_IMAGE` to an official versioned image that includes the updater. When recreating an existing container to enable this feature, reuse its ports, data volume, environment variables, and network settings. This example uses Docker Hub, a fixed port, and the default container name.
+
+```bash
+docker volume create superai-updates
+
+docker run -d --name superai --restart unless-stopped \
+  -p 127.0.0.1:8787:8787 -v superai-data:/data \
+  --label io.superai.updates=true -e SUPERAI_UPDATES=true \
+  -v superai-updates:/run/superai-updates:ro \
+  "$SUPERAI_IMAGE"
+
+docker run -d --name superai-updater --restart unless-stopped --user 0 --no-healthcheck \
+  -e SUPERAI_UPDATE_REPOSITORY=docker.io/taokeone/superai \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v superai-updates:/run/superai-updates \
+  "$SUPERAI_IMAGE" node --experimental-strip-types src/update/worker.ts
+```
+
+For a GHCR deployment, set `SUPERAI_UPDATE_REPOSITORY` to `ghcr.io/taoke-one/superai`. To use a different app container name, set `SUPERAI_UPDATE_CONTAINER` in the updater. The updater requires Docker management access and is the only container that mounts the Docker socket. It exposes no network ports. One-click upgrades require fixed host ports and a writable named volume mounted at `/data`.
+
+Docker Compose deployments upgrade through the Compose procedure above. For Node.js deployments, update the source and restart the process. Both deployment types can check release availability in Settings.
+
 ## Bind address and port
 
-Both quick-start methods make the admin page available locally by default. Finish administrator setup before enabling LAN access.
+The Docker and Docker Compose quick-start examples in the README publish the port on all host interfaces. The repository Compose file binds to `127.0.0.1` when `PUBLISH_HOST` is unset. For Node.js deployments, set the listen address with `HOST` in `.env`.
 
 | Setting      | `docker run`                             | Docker Compose                           | Node.js command line             |
 | ------------ | ---------------------------------------- | ---------------------------------------- | -------------------------------- |
@@ -24,7 +108,7 @@ Both quick-start methods make the admin page available locally by default. Finis
 
 ## LAN access
 
-The README's `docker run` command binds to `127.0.0.1`, which accepts connections from the deployment host. Docker sets port mappings when it creates a container. The commands below keep the old container under another name and mount the existing `superai-data` volume. Replace `192.168.1.10` with the deployment host's LAN IP.
+An existing container deployed with `-p 127.0.0.1:8787:8787` accepts connections from the deployment host. Docker sets port mappings when it creates a container. The commands below keep the old container under another name and mount the existing `superai-data` volume. Replace `192.168.1.10` with the deployment host's LAN IP, or use `-p 8787:8787` to publish on all interfaces.
 
 ```bash
 docker stop superai && docker rename superai superai-local && \
@@ -33,7 +117,7 @@ docker run -d --name superai --restart unless-stopped \
   taokeone/superai:0.1.1
 ```
 
-For Compose, set `PUBLISH_HOST` to the host's LAN IP in the existing project's `.env` and run `docker compose up -d`. For Node.js, set `HOST` and restart the process.
+For the repository Compose file, set `PUBLISH_HOST` to `0.0.0.0` or the host's LAN IP in the existing project's `.env`, then run `docker compose up -d`. With the standalone Compose example in the README, edit `ports` directly. For Node.js, set `HOST` and restart the process.
 
 Open `http://192.168.1.10:8787` on another device on the same LAN. If the connection times out, check that the host allows inbound TCP `8787` from the LAN. To cast private-library tracks, enter the same speaker-reachable address under Music Services in settings.
 
@@ -69,13 +153,6 @@ services:
       - "192.168.1.10:8788:8788"
 ```
 
-## Troubleshooting
-
-- **No speaker appears after QR sign-in.** Confirm that the phone and platform use the same Xiaomi account, then refresh the devices. Enable `MIOT_LOGIN_DIAGNOSTICS=true` while troubleshooting and turn it off afterward.
-- **Search works but music will not play.** Enable a source for the music platform in the player's Music Sources panel and run its availability check. The check probes a sample. Actual playback depends on the source and track.
-- **LX reports a Fake-IP DNS error.** Updated Docker images enable Cloudflare DNS over HTTPS by default for OpenClash Fake-IP compatibility. If an existing deployment explicitly sets `LX_DNS_OVER_HTTPS=false`, change it to `true` and recreate the container. If this resolver is unreachable, set it to `false` and configure system DNS to return real public IPs.
-- **WebDAV transcoding fails.** The Docker image includes FFmpeg. For command-line deployments, check `ffmpeg -version` or set `FFMPEG_PATH` to the executable.
-
 ## Forgotten administrator password
 
 While the updated platform is running, execute in the container terminal:
@@ -91,3 +168,5 @@ docker exec -u node -w /app superai npm run reset-admin-password
 ```
 
 The command displays a random new password and immediately invalidates the old password and existing sessions, without restarting or removing other settings. Keep the output private. Older images need an update containing this command. For command-line deployments, use the same command, system user, working directory, `.env` and `DATA_DIR` as the platform. The management channel uses a local Unix socket in the data directory, without a network endpoint.
+
+[Other frequently asked questions](faq.en.md)
