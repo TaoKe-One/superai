@@ -3,7 +3,9 @@ import type { JsonStore, MiotDevice, StoredState } from "../storage/store.ts";
 import { musicPlaybackRequest } from "./playback.ts";
 import {
   miotSpeechAction,
-  playMiotText,
+  miotWakeAction,
+  sendMiotAction,
+  type MiotActionDelivery,
   type SpeechCredentials,
 } from "./speech.ts";
 
@@ -689,11 +691,11 @@ export class MiotClient {
             throw new Error("播报设备或小米账号已变更");
           const did = authorization?.devices.get(deviceId);
           if (authorization && did) {
-            const delivery = await playMiotText(
+            const delivery = await sendMiotAction(
               authorization.credentials,
               did,
               current.action,
-              text,
+              [text],
               this.fetchImpl,
               signal,
             ).catch(() => "unconfirmed");
@@ -877,6 +879,38 @@ export class MiotClient {
       serviceToken: this.store.encrypt(ticket.serviceToken),
       serviceTokenExpiresAt: Date.now() + 11 * 60 * 60 * 1000,
     };
+  }
+
+  async wakeForReply(
+    deviceId: string,
+    signal: AbortSignal,
+  ): Promise<MiotActionDelivery | "unavailable"> {
+    signal.throwIfAborted();
+    const target = this.speechTarget(deviceId);
+    const wake = target && miotWakeAction(target.hardware);
+    if (!wake) return "unavailable";
+    const authorization = await this.prepareMiotSpeech(
+      target.accountKey,
+      deviceId,
+    );
+    signal.throwIfAborted();
+    const current = this.speechTarget(deviceId);
+    const did = authorization?.devices.get(deviceId);
+    if (
+      !authorization ||
+      !did ||
+      current?.accountKey !== target.accountKey ||
+      current.hardware !== target.hardware
+    )
+      return "unavailable";
+    return sendMiotAction(
+      authorization.credentials,
+      did,
+      wake,
+      [],
+      this.fetchImpl,
+      signal,
+    ).catch(() => "unconfirmed");
   }
 
   /** Prepare credentials while the intent is resolved. This never sends audio. */

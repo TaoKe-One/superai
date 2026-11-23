@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 import { limitedBytes } from "../security/http.ts";
 import ttsCommands from "./tts-commands.json" with { type: "json" };
+import wakeCommands from "./wake-commands.json" with { type: "json" };
 
 const actionPath = "/miotspec/action";
 const actionUrl = "https://api.io.mi.com/app" + actionPath;
@@ -13,12 +14,23 @@ export interface SpeechCredentials {
   ssecurity: string;
 }
 
-export function miotSpeechAction(hardware: string) {
-  const model = hardware.trim().toUpperCase() as keyof typeof ttsCommands;
-  if (!Object.hasOwn(ttsCommands, model)) return;
-  const [siid, aiid] = ttsCommands[model].split("-").map(Number);
+function actionFor(hardware: string, commands: Record<string, string>) {
+  const model = hardware.trim().toUpperCase().split(".").at(-1) ?? "";
+  if (!Object.hasOwn(commands, model)) return;
+  const [siid, aiid] = commands[model].split("-").map(Number);
   return { siid, aiid };
 }
+
+export function miotSpeechAction(hardware: string) {
+  return actionFor(hardware, ttsCommands);
+}
+
+// Wake Up actions with an empty input list from the official MIoT model specs.
+export function miotWakeAction(hardware: string) {
+  return actionFor(hardware, wakeCommands);
+}
+
+export type MiotActionDelivery = "accepted" | "rejected" | "unconfirmed";
 
 const b64 = (bytes: Buffer) => bytes.toString("base64");
 
@@ -44,14 +56,14 @@ function crypt(input: Buffer, key: Buffer) {
   return out;
 }
 
-export async function playMiotText(
+export async function sendMiotAction(
   creds: SpeechCredentials,
   did: string,
   action: { siid: number; aiid: number },
-  text: string,
+  inputs: string[],
   fetchImpl: typeof fetch,
   signal?: AbortSignal,
-): Promise<"accepted" | "rejected" | "unconfirmed"> {
+): Promise<MiotActionDelivery> {
   const nonce = randomBytes(12);
   const key = createHash("sha256")
     .update(Buffer.from(creds.ssecurity, "base64"))
@@ -69,7 +81,7 @@ export async function playMiotText(
       )
       .digest("base64");
   const data = JSON.stringify({
-    params: { did, ...action, in: [text] },
+    params: { did, ...action, in: inputs },
   });
   const content = Buffer.from(data);
   const encrypted = crypt(

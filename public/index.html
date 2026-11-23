@@ -1063,6 +1063,18 @@
                 </button>
               </form>
             </details>
+            <section
+              class="main-panel update-panel"
+              aria-labelledby="runtimeLogsHeading"
+            >
+              <h2 id="runtimeLogsHeading">运行日志</h2>
+              <p class="footnote">
+                自动保留最近 500 条运行记录，包含正常、警告和错误。
+              </p>
+              <button class="btn" id="downloadRuntimeLogs" type="button">
+                下载日志
+              </button>
+            </section>
             <form class="main-panel" id="settingsForm">
               <section class="section">
                 <h2>AI 模型</h2>
@@ -2018,6 +2030,25 @@
         }
       });
       $("#addSource").addEventListener("click", () => addSourceRow());
+      $("#downloadRuntimeLogs").addEventListener("click", async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const response = await fetch("/api/system/logs");
+          if (!response.ok)
+            throw new Error("下载日志失败，请检查登录状态后重试。");
+          const url = URL.createObjectURL(await response.blob());
+          const download = document.createElement("a");
+          download.href = url;
+          download.download = "superai-runtime.log";
+          download.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error) {
+          toast(error.message, true);
+        } finally {
+          button.disabled = false;
+        }
+      });
       const updatePanel = $("#systemUpdate");
       const checkUpdate = $("#checkSystemUpdate");
       const installUpdate = $("#installSystemUpdate");

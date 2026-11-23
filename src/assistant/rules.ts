@@ -1,4 +1,6 @@
+import { musicPlatformByName } from "../music/lx/platforms.ts";
 import type { AssistantIntent, ControlCommand } from "./types.ts";
+import type { PlaybackMode } from "../playback/mode.ts";
 
 const controls: Array<[RegExp, ControlCommand]> = [
   [/^(?:暂停|暂停一下|暂停播放|先停一下|停一下|歇一会儿)$/, "pause"],
@@ -6,6 +8,25 @@ const controls: Array<[RegExp, ControlCommand]> = [
   [/^(?:下一首|切到下一首|换一首|跳过这首)$/, "next"],
   [/^(?:上一首|切回上一首)$/, "previous"],
   [/^(?:停止|停止播放|别放了|关掉音乐)$/, "stop"],
+];
+
+const modePatterns: Array<[RegExp, PlaybackMode]> = [
+  [
+    /^(?:顺序播放|按顺序(?:播放|放歌)|顺序模式|取消(?:单曲|列表)循环|关闭(?:单曲|列表)循环|关闭随机(?:播放)?|别(?:再|一直)?单曲循环(?:了)?)$/u,
+    "order",
+  ],
+  [
+    /^(?:列表循环(?:播放)?|循环列表|循环播放(?:整个|当前)?(?:歌单|列表)|循环播放|循环模式)$/u,
+    "loop",
+  ],
+  [
+    /^(?:单曲循环(?:播放)?|循环(?:播放)?(?:这首|这一首)(?:歌)?|重复(?:播放)?(?:这首|这一首)(?:歌)?)$/u,
+    "single",
+  ],
+  [
+    /^(?:随机(?:播放|放歌|模式)?|打乱(?:顺序)?播放|打乱(?:播放)?顺序)$/u,
+    "random",
+  ],
 ];
 
 const playPrefixes =
@@ -21,13 +42,25 @@ function clean(value: string): string {
     .trim();
 }
 
+function splitMusicPlatform(text: string) {
+  const match = text.match(
+    /^(?:用|从|在)\s*(网易云|QQ\s*|酷狗|酷我|咪咕)(?:音乐)?\s*(?:里面|上|里)?\s*/iu,
+  );
+  if (!match) return { text };
+  return {
+    text: text.slice(match[0].length),
+    platform: musicPlatformByName(match[1]),
+  };
+}
+
 export function explicitMusicQuery(text: string): string | undefined {
   const normalized = clean(
     text.replace(/^(?:小爱同学|小爱|嘿小爱)[，,：:\s]*/u, ""),
   );
-  const prefix = normalized.match(playPrefixes);
+  const { text: command } = splitMusicPlatform(normalized);
+  const prefix = command.match(playPrefixes);
   if (!prefix) return undefined;
-  const query = clean(normalized.slice(prefix[0].length))
+  const query = clean(splitMusicPlatform(command.slice(prefix[0].length)).text)
     .replace(/^(?:一首|一段)/u, "")
     .replace(/(?:这首)?(?:歌曲|音乐|歌)$/u, "")
     .replace(/^[《“"]|[》”"]$/gu, "")
@@ -39,6 +72,19 @@ export function parseRuleIntent(text: string): AssistantIntent | null {
   const normalized = clean(
     text.replace(/^(?:小爱同学|小爱|嘿小爱)[，,：:\s]*/u, ""),
   );
+  const modeRequest = normalized.replace(
+    /^(?:请|帮我|给我)?\s*(?:把)?\s*(?:播放器的?)?\s*(?:播放模式)?\s*(?:(?:切换|切|改|调|设置|设)(?:到|成|为)|(?:开启|打开)|用)?\s*/u,
+    "",
+  );
+  const mode = modePatterns.find(([pattern]) => pattern.test(modeRequest))?.[1];
+  if (mode)
+    return {
+      action: "set_playback_mode",
+      mode,
+      confidence: 0.99,
+      source: "rules",
+    };
+
   for (const [pattern, command] of controls) {
     if (pattern.test(normalized)) {
       return { action: "control", command, confidence: 0.99, source: "rules" };
@@ -75,8 +121,13 @@ export function parseRuleIntent(text: string): AssistantIntent | null {
     /^(?:怎么|为什么|什么是|告诉我|解释一下|能不能|可不可以)/u.test(normalized)
   )
     return null;
-  const match = normalized.match(playPrefixes);
-  let request = match ? clean(normalized.slice(match[0].length)) : "";
+  const leading = splitMusicPlatform(normalized);
+  const match = leading.text.match(playPrefixes);
+  const requestText = splitMusicPlatform(
+    match ? leading.text.slice(match[0].length) : "",
+  );
+  const platform = leading.platform ?? requestText.platform;
+  let request = clean(requestText.text);
   const playlistText = (match ? request : normalized).match(
     /^(.+?)(?:的)?歌单$/u,
   );
@@ -136,6 +187,7 @@ export function parseRuleIntent(text: string): AssistantIntent | null {
     return {
       action: "play_song",
       title: quotedTitle[1],
+      ...(platform ? { platform } : {}),
       confidence: 0.99,
       source: "rules",
     };
@@ -160,6 +212,7 @@ export function parseRuleIntent(text: string): AssistantIntent | null {
         action: "play_song",
         artist: clean(split[1]),
         title,
+        ...(platform ? { platform } : {}),
         confidence: 0.96,
         source: "rules",
       };
@@ -174,6 +227,7 @@ export function parseRuleIntent(text: string): AssistantIntent | null {
   return {
     action: "play_song",
     title: request,
+    ...(platform ? { platform } : {}),
     confidence: 0.84,
     source: "rules",
   };

@@ -20,7 +20,7 @@ export function requestedArtistMatches(requested: string, actual: string) {
 export function assistantArtistQueue(
   artist: string,
   tracks: MusicTrack[],
-  limit = 5,
+  limit = 20,
 ) {
   const seen = new Set<string>();
   const queue: MusicTrack[] = [];
@@ -43,13 +43,20 @@ export function songSearchRequests(
   const parsed = {
     title: intent.title,
     ...(intent.artist ? { artist: intent.artist } : {}),
+    ...(intent.platform ? { platform: intent.platform } : {}),
   };
   const literal = explicitMusicQuery(text);
   return literal &&
     intent.artist &&
     literal.includes("的") &&
     normalize(literal) !== normalize(intent.title)
-    ? [{ title: literal }, parsed]
+    ? [
+        {
+          title: literal,
+          ...(intent.platform ? { platform: intent.platform } : {}),
+        },
+        parsed,
+      ]
     : [parsed];
 }
 
@@ -99,4 +106,39 @@ export function assistantSongQueue(
     if (queue.length >= limit) break;
   }
   return queue;
+}
+
+/** Keep different catalog IDs for the same recording until audio resolution. */
+export function assistantSongAlternates(
+  first: MusicTrack,
+  candidates: MusicTrack[],
+): MusicTrack[] {
+  if (!first.lx) return [];
+  const title = normalize(first.title);
+  const artist = artistName(first.artist);
+  if (!artist || artist === "未知歌手") return [];
+  const album = normalize(first.album ?? "");
+  const platforms = new Set([first.lx.platform]);
+  return candidates.filter((candidate) => {
+    if (
+      !candidate.lx ||
+      platforms.has(candidate.lx.platform) ||
+      normalize(candidate.title) !== title ||
+      artistName(candidate.artist) !== artist
+    )
+      return false;
+    const otherAlbum = normalize(candidate.album ?? "");
+    const hasDurations = !!(first.durationSeconds && candidate.durationSeconds);
+    const sameDuration =
+      hasDurations &&
+      Math.abs(first.durationSeconds! - candidate.durationSeconds!) <= 3;
+    if (
+      (album && otherAlbum && album !== otherAlbum) ||
+      (hasDurations && !sameDuration) ||
+      (!(album && otherAlbum) && !sameDuration)
+    )
+      return false;
+    platforms.add(candidate.lx.platform);
+    return true;
+  });
 }

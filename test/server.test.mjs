@@ -1027,7 +1027,8 @@ test(
     t.after(async () => {
       if (server.listening)
         await new Promise((resolve) => server.close(resolve));
-      await rm(dataDir, { recursive: true, force: true });
+      await server.flushLogs();
+      await rm(dataDir, { recursive: true, force: true, maxRetries: 3 });
     });
     await new Promise((resolve, reject) => {
       server.once("error", reject);
@@ -1057,9 +1058,14 @@ test(
       artist: "fixture",
       playUrl: "https://media.example/" + id + ".mp3",
     });
-    await app("/api/playback/mode", "PUT", { mode: "loop" });
+    await app("/api/playback/mode", "PUT", { mode: "single" });
     await app("/api/music/play", "POST", { track: track("first") });
     await app("/api/music/queue/add", "POST", { track: track("second") });
+    const assistant = await app("/api/assistant/command", "POST", {
+      text: "按顺序播放",
+    });
+    assert.equal(assistant.playbackMode, "order");
+    assert.deepEqual(calls, ["/first.mp3"]);
     await Promise.race([
       secondCast.promise,
       new Promise((_, reject) => {

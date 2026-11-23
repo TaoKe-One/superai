@@ -122,6 +122,22 @@ for (const [mode, initial, expected] of [
   );
 }
 
+test("sparse polling still advances when firmware has wrapped at the expected end", async (t) => {
+  const { playback, calls, sample } = await setup(t, 0, "L05C", 240);
+  await sample(219, 1, 219_000, { duration: 240, mediaId: "pushed" });
+  await sample(4, 1, 25_000, { duration: 240, mediaId: "pushed" });
+  assert.deepEqual(calls, ["/first.mp3", "/second.mp3"]);
+  assert.equal(playback.queue().currentIndex, 1);
+});
+
+test("a sparse rewind far from the expected end keeps the current song", async (t) => {
+  const { playback, calls, sample } = await setup(t, 0, "L05C", 240);
+  await sample(140, 1, 140_000, { duration: 240, mediaId: "pushed" });
+  await sample(4, 1, 25_000, { duration: 240, mediaId: "pushed" });
+  assert.deepEqual(calls, ["/first.mp3"]);
+  assert.equal(playback.queue().currentIndex, 0);
+});
+
 test("a stopped report after the end advances without a final position", async (t) => {
   const { calls, sample, nearEnd } = await setup(t, 0);
   await nearEnd();

@@ -381,6 +381,7 @@ test("bridge isolates delayed lyric responses, follows sampled device progress a
 test("temporary detach keeps browser audio until a successful manual or voice cast", async () => {
   const elements = new Map();
   const calls = [];
+  const audioEvents = new Map();
   let voice,
     failCast = false,
     element;
@@ -412,7 +413,9 @@ test("temporary detach keeps browser audio until a successful manual or voice ca
     Audio: class {
       paused = true;
       currentTime = 0;
-      addEventListener() {}
+      addEventListener(type, listener) {
+        audioEvents.set(type, listener);
+      }
       removeAttribute() {
         this.src = "";
       }
@@ -424,6 +427,7 @@ test("temporary detach keeps browser audio until a successful manual or voice ca
         this.paused = true;
       }
       play() {
+        this.ended = false;
         this.paused = false;
         return Promise.resolve();
       }
@@ -436,6 +440,7 @@ test("temporary detach keeps browser audio until a successful manual or voice ca
       calls.push({ path, body });
       let data = {};
       const ok = path !== "/api/lx/player/play" || !failCast;
+      if (path === "/api/playback/mode") remote.playbackMode = body.mode;
       if (path === "/api/playback/state")
         data = { ...remote, voicePlayback: voice };
       if (path === "/api/lx/player/browser")
@@ -464,6 +469,26 @@ test("temporary detach keeps browser audio until a successful manual or voice ca
   );
   await player.playAt(1);
   assert.match(element.src, /\/two$/);
+  await player.togglePlayModeStore();
+  assert.equal(remote.playbackMode, "loop");
+  assert.equal(player.playMode, "sequence");
+  // A newer mode from the server applies at the next end event, even before polling.
+  remote.playbackMode = "order";
+  const playedBeforeEnd = calls.filter(
+    (call) => call.path === "/api/lx/player/browser",
+  ).length;
+  element.ended = true;
+  element.paused = true;
+  audioEvents.get("ended")();
+  await flush();
+  await flush();
+  assert.equal(player.playMode, "singlePlay");
+  assert.equal(player.currentIndex, 1);
+  assert.equal(
+    calls.filter((call) => call.path === "/api/lx/player/browser").length,
+    playedBeforeEnd,
+  );
+  await player.playAt(1);
   failCast = true;
   assert.equal(
     (await player.connectCastDevice({ device_id: "fixture" })).ok,

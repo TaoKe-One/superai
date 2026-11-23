@@ -9,6 +9,7 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { LxSourceMetadata } from "../music/lx/runtime.ts";
 import type { MusicTrack } from "../music/types.ts";
+import { isPlaybackMode, type PlaybackMode } from "../playback/mode.ts";
 import type { SourceRouting, SourceHealthMap } from "../music/lx/health.ts";
 
 import { defaultMusicServices, libraryRef } from "../music/library/config.ts";
@@ -41,7 +42,7 @@ export interface StoredTrack {
   coverUrl?: string;
 }
 
-export type PlaybackMode = "order" | "loop" | "single" | "random";
+export type { PlaybackMode } from "../playback/mode.ts";
 
 export interface MiotDevice {
   deviceId: string;
@@ -356,8 +357,7 @@ function normalizeState(value: unknown): StoredState {
     config.playbackMode === undefined
       ? defaults.config.playbackMode
       : config.playbackMode;
-  if (!["order", "loop", "single", "random"].includes(playbackMode))
-    throw new Error("播放模式无效");
+  if (!isPlaybackMode(playbackMode)) throw new Error("播放模式无效");
   const normalizeSavedTrack = (track: unknown): StoredTrack => {
     if (
       !record(track) ||
@@ -499,7 +499,7 @@ function normalizeState(value: unknown): StoredState {
         config.devicePlaybackQueues,
         normalizeSavedTrack,
       ),
-      playbackMode: playbackMode as PlaybackMode,
+      playbackMode,
       favorites: normalizedFavorites,
       playbackHistory: normalizedHistory,
       voiceMonitorEnabled: config.voiceMonitorEnabled === true,

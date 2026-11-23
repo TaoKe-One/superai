@@ -26,9 +26,15 @@ Search your private library by song or artist in the player. The screenshots use
 
 ### Import an LX source
 
-Open **Player → Music Sources**, import a compatible LX script you have permission to use, enable it, and run the availability check. Search, charts, and playlists provide catalog entries. Playback sources resolve the stream URLs. The check validates sample tracks. If a QQ Music track fails, confirm the source is enabled and supports QQ Music, then test the requested track.
+Open **Player → Music Sources**, import a compatible LX script you have permission to use from a file or URL (up to 2 MiB per script), enable it, and run the availability check. Search, charts, and playlists provide catalog entries. Playback sources resolve the stream URLs. The check validates sample tracks. If a QQ Music track fails, confirm the source is enabled and supports QQ Music, then test the requested track.
+
+For a voice request for a specific song, SuperAI searches the online platforms supported by enabled LX sources in parallel and matches the title and artist. It checks matching recordings from NetEase Cloud Music, QQ Music, Kugou, and Kuwo in parallel, starting with one source per platform and running up to four checks at a time. It tries Migu once the other platforms have failed. Within each platform, cooldown, priority, and recent availability determine source order. SuperAI casts the first version to pass the audio check, saves it in the queue, and cancels the other checks. Say “用 QQ 音乐播放周杰伦的晴天” to compare sources within QQ Music only.
+
+When you ask to hear an artist’s music or popular songs, SuperAI queues up to 20 distinct tracks by that artist by default.
 
 ## Playback and casting
+
+Use a voice command to switch between sequential play, queue repeat, track repeat, and shuffle. Browser and speaker playback share the current mode. A mode change applies when the current queue advances.
 
 - Double-click a track row in search, charts, a private library, recent plays, or a playlist to start the current list at that track. The player mode controls what plays next.
 - Open **Player → My Music** for favorites, recent plays, and saved playlists. Select tracks in search or charts and import them to a playlist.
@@ -44,10 +50,14 @@ Open **Player → Music Sources**, import a compatible LX script you have permis
 3. Ask a question in **AI Assistant** to verify a text reply. Configure provider search or external search under **Settings → Web Search** for questions that need current information.
 4. Enable monitoring under **Speaker Devices → Voice Diagnostics**. Use command preview to inspect how a request is interpreted. Then ask the speaker to play a few songs by an artist or answer a question.
 
-SuperAI reads Xiaomi cloud conversation records, identifies intent, and handles music requests, playback controls, and questions. Supported speakers read answers aloud. Clarifications can continue on the same speaker. XiaoAi handles appliances, infrared controls, scenes, and reminders. Its native reply may play before SuperAI responds.
+SuperAI reads Xiaomi cloud conversation records, identifies intent, and handles music requests, playback controls, and questions. Supported speakers read answers aloud. After a clarifying question, supported speakers wake again. Speak after the prompt tone. Each question opens a 60-second reply window, and SuperAI keeps the context on that speaker until the request completes or the window expires. If the speaker does not wake on its own, say “小爱同学” and continue. XiaoAi handles appliances, infrared controls, scenes, and reminders. Its native reply may play before SuperAI responds.
 
 [![The web AI Assistant showing a user question and the AI's reply](previews/assistant.png)](previews/assistant.png)
 
 ## Passwords and updates
 
 Starting with v0.1.2, **Settings → Change Administrator Password** verifies the current password and accepts a new password of at least five characters. Changing the password signs out all administrator sessions. On versions with the built-in updater, Docker, Docker Compose, and command-line deployments can check and install stable releases under **Settings → System Update**. Sign in again after updating. [Password recovery](deployment.en.md#forgotten-administrator-password) · [One-click upgrades](deployment.en.md#one-click-upgrades-in-settings)
+
+## Download runtime logs
+
+Administrators can select **Download Logs** under **Settings → Runtime Logs** to export `superai-runtime.log`. The log keeps the most recent 500 info, warning, and error entries for app startup and shutdown, API requests, private library audio transfers, and voice task outcomes. Entries use UTC timestamps and persist in `runtime.log` in the data directory. The export contains diagnostic event and status information.

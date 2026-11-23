@@ -25,8 +25,8 @@ import wyLyric from "../../../vendor/lx-music/musicSdk/wy/lyric.js";
 import mgLyric from "../../../vendor/lx-music/musicSdk/mg/lyric.js";
 import { withLxHttp, abortable } from "./http.ts";
 
-export const PLATFORMS = ["wy", "tx", "kg", "kw", "mg"] as const;
-export type LxPlatform = (typeof PLATFORMS)[number];
+import { isLxPlatform, type LxPlatform } from "./platforms.ts";
+export { PLATFORMS, type LxPlatform } from "./platforms.ts";
 const modules: Record<string, Record<string, any>> = {
   kw: { search: kwSearch, list: kwList, hot: kwHot, board: kwBoard },
   kg: { search: kgSearch, list: kgList, hot: kgHot, board: kgBoard },
@@ -42,9 +42,8 @@ const lyricModules: Record<string, any> = {
   mg: mgLyric,
 };
 export function lxPlatform(raw: unknown): LxPlatform {
-  if (typeof raw !== "string" || !PLATFORMS.includes(raw as LxPlatform))
-    throw new Error("不支持的音乐平台");
-  return raw as LxPlatform;
+  if (!isLxPlatform(raw)) throw new Error("不支持的音乐平台");
+  return raw;
 }
 export class LxCatalog {
   private fetchImpl?: typeof fetch;

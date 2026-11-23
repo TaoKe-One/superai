@@ -3,6 +3,7 @@ import type { JsonStore } from "../../storage/store.ts";
 import type { PlaybackService } from "../../playback/service.ts";
 import { LxMusicService, toLxSong } from "./service.ts";
 import { lxPlatform } from "./catalog.ts";
+import { MAX_LX_SCRIPT_BYTES } from "./runtime.ts";
 import {
   startSourceCheck,
   sourceCheckStatus,
@@ -73,6 +74,7 @@ export async function handleLxApi(
     return {
       quality: store.snapshot().config.lxQuality,
       qualityFallback: store.snapshot().config.lxQualityFallback,
+      maxScriptBytes: MAX_LX_SCRIPT_BYTES,
     };
   if (path === "/settings" && method === "PUT") {
     if (

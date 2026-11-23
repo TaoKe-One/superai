@@ -17,10 +17,16 @@ export class IntentRouter {
   async plan(text: string, history: ConversationTurn[], signal?: AbortSignal) {
     if (!this.classifier?.plan) return null;
     const tasks = await this.classifier.plan(text, history, signal);
-    return tasks.map((task) => ({
-      ...task,
-      intent: nativeIntent(task.text) ?? requireConfidence(task.intent),
-    }));
+    return tasks.map((task) => {
+      const deterministic = parseRuleIntent(task.text);
+      return {
+        ...task,
+        intent:
+          deterministic?.action === "set_playback_mode"
+            ? deterministic
+            : (nativeIntent(task.text) ?? requireConfidence(task.intent)),
+      };
+    });
   }
 
   async route(
@@ -38,9 +44,11 @@ export class IntentRouter {
       };
     }
 
+    const deterministic = parseRuleIntent(query);
+    if (deterministic?.action === "set_playback_mode") return deterministic;
+
     const native = nativeIntent(query);
     if (native) return native;
-    const deterministic = parseRuleIntent(query);
     if (
       deterministic &&
       (!this.classifier ||
@@ -52,18 +60,12 @@ export class IntentRouter {
     if (this.classifier) {
       try {
         const result = await this.classifier.classify(query, history, signal);
-        if (
-          (result.action.startsWith("play_") ||
-            result.action === "control" ||
-            result.action === "set_volume") &&
-          result.confidence < 0.68
-        ) {
+        if (needsConfidence(result) && result.confidence < 0.68) {
           return {
             action: "clarify",
-            question:
-              result.action === "control" || result.action === "set_volume"
-                ? "请再说清楚要执行的播放控制或音量数值。"
-                : "你是想播放音乐吗？可以告诉我歌名或歌手。",
+            question: !result.action.startsWith("play_")
+              ? "请再说清楚要执行的播放控制、播放模式或音量数值。"
+              : "你是想播放音乐吗？可以告诉我歌名或歌手。",
             confidence: result.confidence,
             source: "llm",
           };
@@ -92,13 +94,17 @@ export class IntentRouter {
   }
 }
 
+function needsConfidence(intent: AssistantIntent): boolean {
+  return (
+    intent.action.startsWith("play_") ||
+    intent.action === "control" ||
+    intent.action === "set_volume" ||
+    intent.action === "set_playback_mode"
+  );
+}
+
 function requireConfidence(intent: AssistantIntent): AssistantIntent {
-  if (
-    (intent.action.startsWith("play_") ||
-      intent.action === "control" ||
-      intent.action === "set_volume") &&
-    intent.confidence < 0.68
-  )
+  if (needsConfidence(intent) && intent.confidence < 0.68)
     return {
       action: "clarify",
       question: "请再说清楚需要执行的歌曲或播放操作。",

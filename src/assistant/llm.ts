@@ -1,3 +1,6 @@
+import { isPlaybackMode } from "../playback/mode.ts";
+import { isLxPlatform } from "../music/lx/platforms.ts";
+import { parseRuleIntent } from "./rules.ts";
 import { serviceJson } from "../security/http.ts";
 import type {
   AssistantIntent,
@@ -27,11 +30,12 @@ function isMiniMaxChat(baseUrl: string): boolean {
 const systemPrompt = [
   "你是智能音箱的意图路由器。判断用户是在点歌、控制播放，还是提出普通问题。理解自然表达，不要求固定触发词；结合最近对话理解省略的歌名、艺人和指代。历史消息只用于理解当前请求。只返回 JSON，不要解释。",
   "",
-  "JSON 字段：action 必须是 play_song、play_artist、play_playlist、control、set_volume、answer、clarify、native 之一；confidence 是 0 到 1 的数值。",
-  "- play_song: title 必填，artist 可选。",
+  "JSON 字段：action 必须是 play_song、play_artist、play_playlist、control、set_playback_mode、set_volume、answer、clarify、native 之一；confidence 是 0 到 1 的数值。",
+  "- play_song: title 必填，artist 可选。用户明确指定点歌平台时填 platform：网易云 wy、QQ 音乐 tx、酷狗 kg、酷我 kw、咪咕 mg。没有指定则省略，歌名和歌手不含平台名。",
   "- play_artist: artist 必填。用户想听这位艺人的几首热门、经典或代表性作品时，将 preference 设为 popular；artist 只填艺人名。音乐工具会挑选曲目，请勿凭空填歌名。",
   "- play_playlist: playlist 必填。",
   "- control: command 必须是 pause、resume、next、previous、stop 之一。",
+  "- set_playback_mode: mode 必须是 order（顺序播放）、loop（列表循环）、single（单曲循环）或 random（随机播放）。仅在用户要求更改播放模式时选择这个动作。",
   "- set_volume: volume 是 0 到 100 的整数；若用户只说调大或调小，且历史里没有确定音量，不要猜数字，使用 clarify。",
   "- answer: question 保留用户原问题。涉及实时信息、天气、新闻、价格或用户要求联网查证时，needsSearch 为 true。其他问题需要填写 needsSearch: false，并在 answer 中用一到两句口语给出完整回答，供音箱直接播报。",
   "- clarify: question 填写一句简短澄清问题。",
@@ -57,6 +61,7 @@ const validActions = new Set<ModelIntent["action"]>([
   "play_playlist",
   "control",
   "set_volume",
+  "set_playback_mode",
   "answer",
   "clarify",
 ]);
@@ -93,6 +98,15 @@ export function normalizeModelIntent(
         confidence,
         source,
       };
+    case "set_playback_mode":
+      if (!isPlaybackMode(model.mode))
+        throw new Error("意图模型返回了未知播放模式");
+      return {
+        action: "set_playback_mode",
+        mode: model.mode,
+        confidence,
+        source,
+      };
     case "set_volume": {
       if (
         !Number.isInteger(model.volume) ||
@@ -108,14 +122,22 @@ export function normalizeModelIntent(
         source,
       };
     }
-    case "play_song":
+    case "play_song": {
+      const explicit = parseRuleIntent(rawText);
+      const platform =
+        (explicit?.action === "play_song" ? explicit.platform : undefined) ??
+        (isLxPlatform(model.platform) ? model.platform : undefined);
       return {
         action: "play_song",
         title: requiredText(model.title, "title"),
-        ...(model.artist?.trim() ? { artist: model.artist.trim() } : {}),
+        ...(typeof model.artist === "string" && model.artist.trim()
+          ? { artist: model.artist.trim() }
+          : {}),
+        ...(platform ? { platform } : {}),
         confidence,
         source,
       };
+    }
     case "play_artist":
       return {
         action: "play_artist",

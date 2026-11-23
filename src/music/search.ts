@@ -4,12 +4,14 @@ import type { MusicRequest, MusicSource, MusicTrack } from "./types.ts";
 export interface MusicSearchResult {
   selection: TrackSelection;
   tracks: MusicTrack[];
+  lxCandidates?: MusicTrack[];
   sourceErrors: Array<{ sourceId: string; message: string }>;
 }
 
 export async function searchMusic(
   request: MusicRequest,
   sources: MusicSource[],
+  retainLxCandidates = false,
 ): Promise<MusicSearchResult> {
   const results = await Promise.allSettled(
     sources.map((source) => source.search(request)),
@@ -57,6 +59,9 @@ export async function searchMusic(
   return {
     selection: selectTrack(request, deduplicated),
     tracks: deduplicated,
+    ...(retainLxCandidates
+      ? { lxCandidates: tracks.filter((track) => track.lx) }
+      : {}),
     sourceErrors,
   };
 }

@@ -342,6 +342,67 @@ function cloudSpeechFixture(input, form) {
   return result;
 }
 
+test("L05C sends the native wake action with no input and no retry after an uncertain receipt", async (t) => {
+  const store = await setup(t, "L05C");
+  const sent = [];
+  const client = new MiotClient(
+    store,
+    async (input, options) => {
+      switch (new URL(input).pathname) {
+        case "/admin/v2/device_list":
+          return Response.json({
+            code: 0,
+            data: [
+              { deviceID: "other", miotDID: "111" },
+              { deviceID: "speaker", miotDID: "222" },
+            ],
+          });
+        case "/pass/serviceLogin":
+          return Response.json({
+            code: 0,
+            userId: "fixture",
+            ssecurity: "c2VjdXJpdHk=",
+            nonce: "6",
+            location: "https://account.xiaomi.com/sts",
+          });
+        case "/sts":
+          return new Response("", {
+            headers: { "set-cookie": "serviceToken=fixture-service; Path=/" },
+          });
+        case "/app/miotspec/action": {
+          const form = options.body;
+          const request = cloudSpeechFixture(
+            Buffer.from(form.get("data"), "base64"),
+            form,
+          );
+          sent.push(JSON.parse(request.toString()).params);
+          if (sent.length > 1) throw new Error("timeout");
+          return new Response(
+            cloudSpeechFixture(
+              Buffer.from(JSON.stringify({ code: 0, result: { code: 0 } })),
+              form,
+            ).toString("base64"),
+          );
+        }
+        default:
+          assert.fail("unexpected request " + input);
+      }
+    },
+    undefined,
+    true,
+  );
+  const signal = new AbortController().signal;
+  assert.equal(await client.wakeForReply("speaker", signal), "accepted");
+  assert.deepEqual(sent, [{ did: "222", siid: 5, aiid: 1, in: [] }]);
+  assert.equal(await client.wakeForReply("speaker", signal), "unconfirmed");
+  assert.equal(sent.length, 2);
+  assert.equal(await client.wakeForReply("missing", signal), "unavailable");
+  await assert.rejects(client.wakeForReply("speaker", AbortSignal.abort()), {
+    name: "AbortError",
+  });
+  assert.equal(sent.length, 2);
+});
+
 test("model-specific MIoT actions target the correct DID and retry only rejected speech", async (t) => {
   for (const [hardware, model, action, reply, expected] of [
     ["L05C", "", [5, 3], { code: 0 }, "miot"],

@@ -22,7 +22,30 @@ const environment = readFile(
   new URL("./runtime-env.js", import.meta.url),
   "utf8",
 );
+export const MAX_LX_SCRIPT_BYTES = 2 * 1024 * 1024;
+const MAX_ACTIVE = 4;
 let active = 0;
+const runtimeWaiters = new Set<() => void>();
+
+export class LxRuntimeBusyError extends Error {
+  constructor() {
+    super("音源解析繁忙，请稍后再试");
+  }
+}
+
+async function waitForRuntimeRelease(signal: AbortSignal) {
+  signal.throwIfAborted();
+  let wake!: () => void;
+  const available = new Promise<void>((resolve) => {
+    wake = resolve;
+    runtimeWaiters.add(wake);
+  });
+  try {
+    await abortable(available, signal);
+  } finally {
+    runtimeWaiters.delete(wake);
+  }
+}
 const QUALITY = ["128k", "320k", "flac", "flac24bit"];
 export async function runLxScript(
   script: string,
@@ -30,10 +53,27 @@ export async function runLxScript(
   fetchImpl?: typeof fetch,
   timeoutMs = 15000,
   outerSignal?: AbortSignal,
+  waitForSlot = false,
 ): Promise<any> {
-  if (Buffer.byteLength(script) > 512 * 1024)
-    throw new Error("音源脚本不能超过 512 KB");
-  if (active >= 4) throw new Error("音源解析繁忙，请稍后再试");
+  if (Buffer.byteLength(script) > MAX_LX_SCRIPT_BYTES)
+    throw new Error("音源脚本不能超过 2 MiB");
+  const started = Date.now();
+  if (waitForSlot && active >= MAX_ACTIVE) {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    try {
+      const signal = outerSignal
+        ? AbortSignal.any([timeout, outerSignal])
+        : timeout;
+      // Another waiting probe may claim the slot before this continuation runs.
+      while (active >= MAX_ACTIVE) await waitForRuntimeRelease(signal);
+    } catch (error) {
+      outerSignal?.throwIfAborted();
+      if (timeout.aborted) throw new LxRuntimeBusyError();
+      throw error;
+    }
+  }
+  outerSignal?.throwIfAborted();
+  if (active >= MAX_ACTIVE) throw new LxRuntimeBusyError();
   active++;
   let runtime: any, vm: any;
   const abort = new AbortController();
@@ -262,7 +302,9 @@ export async function runLxScript(
     ).dispose();
     evaluate(await environment).dispose();
     evaluate(script).dispose();
-    const deadline = Date.now() + Math.min(info ? timeoutMs : 5000, timeoutMs);
+    const deadline =
+      (waitForSlot ? started : Date.now()) +
+      Math.min(info ? timeoutMs : 5000, timeoutMs);
     const tick = async () => {
       if (abort.signal.aborted) throw new Error("音源解析已取消");
       if (Date.now() > deadline) throw new Error("音源脚本初始化或解析超时");
@@ -312,6 +354,7 @@ export async function runLxScript(
       if (runtime) runtime.dispose();
     } finally {
       active--;
+      for (const wake of runtimeWaiters) wake();
     }
   }
 }

@@ -42,23 +42,27 @@ import type { AssistantIntent } from "./assistant/types.ts";
 import { VoiceConversationMonitor } from "./assistant/voice-monitor.ts";
 import { LxMusicService, fromLxSong } from "./music/lx/service.ts";
 import { handleLxApi } from "./music/lx/api.ts";
+import { MAX_LX_SCRIPT_BYTES } from "./music/lx/runtime.ts";
+import { isLxPlatform, PLATFORM_NAMES } from "./music/lx/platforms.ts";
 import { LxResolutionError } from "./music/lx/health.ts";
 import { playlistQuery } from "./music/playlist-query.ts";
 import { stopSourceCheck } from "./music/lx/checks.ts";
 import { validLxTrack } from "./storage/store.ts";
-import type { MusicTrack } from "./music/types.ts";
+import type { MusicRequest, MusicTrack } from "./music/types.ts";
 import type { MusicSearchResult } from "./music/search.ts";
 import {
   assistantArtistQueue,
+  assistantSongAlternates,
   assistantSongQueue,
-  requestedArtistMatches,
   songSearchRequests,
 } from "./music/assistant-selection.ts";
 import { PlaybackService } from "./playback/service.ts";
+import { PLAYBACK_MODE_NAMES } from "./playback/mode.ts";
 import { SpeakerUrlRelay } from "./playback/url-relay.ts";
 import { MiotClient } from "./miot/client.ts";
 import { startAdminControl } from "./security/admin-control.ts";
 import { AdminAuth } from "./security/auth.ts";
+import { RuntimeLog } from "./storage/runtime-log.ts";
 import {
   appVersion,
   latestVersion,
@@ -74,6 +78,39 @@ import {
 } from "./storage/store.ts";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+// A control character may expand to six bytes in a JSON string.
+const MAX_LX_IMPORT_BODY_BYTES = MAX_LX_SCRIPT_BYTES * 6 + 1024;
+const LOG_DOWNLOAD_PATH = "/api/system/logs";
+const LOGGED_API_GROUPS = new Set([
+  "ai",
+  "assistant",
+  "login",
+  "logout",
+  "lx",
+  "miot",
+  "music",
+  "playback",
+  "settings",
+  "setup",
+  "status",
+  "system",
+  "voice",
+]);
+const LOGGED_API_ROUTES = new Set([
+  "/api/ai/models",
+  "/api/ai/test",
+  "/api/assistant/command",
+  "/api/miot/devices/refresh",
+  "/api/miot/control",
+  "/api/music/play",
+  "/api/music/search",
+  "/api/playback/state",
+  "/api/settings/admin-password",
+  "/api/system/update",
+  LOG_DOWNLOAD_PATH,
+  "/api/voice/diagnostics",
+  "/api/voice/monitor",
+]);
 const PUBLIC_FILE = fileURLToPath(
   new URL("../public/index.html", import.meta.url),
 );
@@ -106,6 +143,11 @@ const playbackFor = (
           (track, signal) =>
             new MusicServices(store, fetchImpl).resolvePlayback(track, signal),
           id || undefined,
+          (tracks, signal) =>
+            new MusicServices(store, fetchImpl).resolveFirstPlayable(
+              tracks,
+              signal,
+            ),
         );
         services.set(id, service);
         if (entry!.monitoring) service.startMonitoring();
@@ -145,6 +187,11 @@ const playbackFor = (
       (track, signal) =>
         new MusicServices(store, fetchImpl).resolvePlayback(track, signal),
       deviceId,
+      (tracks, signal) =>
+        new MusicServices(store, fetchImpl).resolveFirstPlayable(
+          tracks,
+          signal,
+        ),
     );
     entry.services.set(deviceId, service);
     if (entry.monitoring) service.startMonitoring();
@@ -167,7 +214,10 @@ function sendJson(
   response.end(JSON.stringify(body));
 }
 
-async function readJson(request: IncomingMessage): Promise<unknown> {
+async function readJson(
+  request: IncomingMessage,
+  maxBytes = MAX_BODY_BYTES,
+): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   let oversized = false;
@@ -175,7 +225,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     if (oversized) continue;
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       oversized = true;
       chunks.length = 0;
       continue;
@@ -198,6 +248,8 @@ export interface AppServerOptions {
 export async function createAppServer(options: AppServerOptions = {}) {
   const store = new JsonStore(options.dataDir);
   await store.init();
+  const logs = new RuntimeLog(options.dataDir);
+  await logs.init();
   const auth = new AdminAuth(store);
   const fetchImpl = options.fetchImpl ?? fetch;
   const updateSocket =
@@ -257,6 +309,17 @@ export async function createAppServer(options: AppServerOptions = {}) {
         voicePlayback = { id: randomUUID(), deviceId: context.deviceId };
       return result;
     }),
+    (status) =>
+      logs.record(
+        status === "failed"
+          ? "ERROR"
+          : status === "unconfirmed" || status === "no_match"
+            ? "WARN"
+            : "INFO",
+        "voice.result",
+        "status=" + status,
+      ),
+    (deviceId, signal) => miot.wakeForReply(deviceId, signal),
   );
   const voiceMonitor = new VoiceConversationMonitor(
     store,
@@ -284,12 +347,47 @@ export async function createAppServer(options: AppServerOptions = {}) {
   syncVoice();
 
   const server = createServer(async (request, response) => {
+    const start = performance.now();
     let url: URL;
     try {
       url = new URL(request.url ?? "/", "http://localhost");
     } catch {
+      logs.record("WARN", "http.invalid_request_target");
       sendJson(response, 400, { error: "invalid_request_target" });
       return;
+    }
+    const path = url.pathname;
+    if (path.startsWith("/api/") || path.startsWith("/media/private/")) {
+      const group = path.split("/", 3)[2];
+      const route = LOGGED_API_ROUTES.has(path)
+        ? path
+        : path.startsWith("/media/private/")
+          ? "/media/private/*"
+          : LOGGED_API_GROUPS.has(group)
+            ? "/api/" + group
+            : "/api/*";
+      const method = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(
+        request.method ?? "",
+      )
+        ? request.method
+        : "OTHER";
+      const fields = "method=" + method + " route=" + route;
+      response.once?.("finish", () => {
+        const status = response.statusCode;
+        logs.record(
+          status >= 500 ? "ERROR" : status >= 400 ? "WARN" : "INFO",
+          "http.request",
+          fields +
+            " status=" +
+            status +
+            " elapsed_ms=" +
+            Math.round(performance.now() - start),
+        );
+      });
+      response.once?.("close", () => {
+        if (!response.writableFinished)
+          logs.record("WARN", "http.interrupted", fields);
+      });
     }
     if (request.method === "GET" && url.pathname === "/healthz") {
       sendJson(response, 200, { status: "ok", version: appVersion });
@@ -403,6 +501,16 @@ export async function createAppServer(options: AppServerOptions = {}) {
       }
       if (!auth.isAuthenticated(request)) {
         sendJson(response, 401, { error: "authentication_required" });
+        return;
+      }
+      if (url.pathname === LOG_DOWNLOAD_PATH && request.method === "GET") {
+        response.writeHead(200, {
+          "content-type": "text/plain; charset=utf-8",
+          "content-disposition": 'attachment; filename="superai-runtime.log"',
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        });
+        response.end(logs.download());
         return;
       }
       if (url.pathname === "/api/system/update") {
@@ -567,9 +675,13 @@ export async function createAppServer(options: AppServerOptions = {}) {
         return;
       }
       if (url.pathname.startsWith("/api/lx/")) {
+        const maxBodyBytes =
+          request.method === "POST" && url.pathname === "/api/lx/sources/import"
+            ? MAX_LX_IMPORT_BODY_BYTES
+            : MAX_BODY_BYTES;
         const body =
           request.method === "POST" || request.method === "PUT"
-            ? objectValue(await readJson(request))
+            ? objectValue(await readJson(request, maxBodyBytes))
             : {};
         const castTarget =
           url.pathname === "/api/lx/player/play" && request.method === "POST"
@@ -826,6 +938,22 @@ export async function createAppServer(options: AppServerOptions = {}) {
           fetchImpl,
           normalizeHistory(body.history),
         );
+        if (result.modelError === "request" || result.modelError === "format") {
+          logs.record(
+            "ERROR",
+            "assistant.model_failed",
+            "reason=" + result.modelError,
+          );
+        } else if (
+          result.executionStatus === "failed" ||
+          result.executionStatus === "no_match"
+        ) {
+          logs.record(
+            "WARN",
+            "assistant.execution",
+            "status=" + result.executionStatus,
+          );
+        }
         sendJson(response, 200, result);
         return;
       }
@@ -853,7 +981,11 @@ export async function createAppServer(options: AppServerOptions = {}) {
           200,
           await queryMusic(
             store,
-            { title: intent.title, artist: intent.artist },
+            {
+              title: intent.title,
+              artist: intent.artist,
+              platform: intent.platform,
+            },
             fetchImpl,
           ),
         );
@@ -904,6 +1036,7 @@ export async function createAppServer(options: AppServerOptions = {}) {
           try {
             deviceStatus = await miot.getPlaybackStatus(device.deviceId);
           } catch (error) {
+            logs.record("WARN", "playback.device_status_failed");
             deviceStatus = {
               status: -1,
               error: safeMessage(error).slice(0, 160),
@@ -1009,10 +1142,7 @@ export async function createAppServer(options: AppServerOptions = {}) {
       }
       if (url.pathname === "/api/playback/mode" && request.method === "PUT") {
         const body = objectValue(await readJson(request));
-        const mode = stringValue(body.mode);
-        const saved = await playback.setMode(
-          mode as Parameters<PlaybackService["setMode"]>[0],
-        );
+        const saved = await playback.setMode(body.mode);
         sendJson(response, 200, { mode: saved });
         return;
       }
@@ -1177,7 +1307,12 @@ export async function createAppServer(options: AppServerOptions = {}) {
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
   server.keepAliveTimeout = 5_000;
-  server.on("listening", () => playback.startMonitoring());
+  let started = false;
+  server.on("listening", () => {
+    started = true;
+    logs.record("INFO", "server.started", "version=" + appVersion);
+    playback.startMonitoring();
+  });
   server.on("close", () => {
     void playback.stopMonitoring();
     music.stopScan();
@@ -1185,11 +1320,16 @@ export async function createAppServer(options: AppServerOptions = {}) {
     void voiceCoordinator.stop();
     stopSourceCheck(store);
   });
+  server.on("close", () => {
+    if (started) logs.record("INFO", "server.stopped");
+    started = false;
+    void logs.flush();
+  });
   if (options.adminControl) {
     const control = await startAdminControl(auth, options.dataDir);
     server.on("close", () => control.close());
   }
-  return server;
+  return Object.assign(server, { flushLogs: () => logs.flush() });
 }
 
 export async function handleAssistantRoute(
@@ -1448,6 +1588,15 @@ export async function executeAssistantIntent(
       playbackQueue: playback.queue(),
     };
   }
+  if (intent.action === "set_playback_mode") {
+    checkExecution(context);
+    const mode = await playback.setMode(intent.mode);
+    return {
+      intent,
+      message: "已切换为" + PLAYBACK_MODE_NAMES[mode],
+      playbackMode: mode,
+    };
+  }
   if (intent.action === "set_volume") {
     const selected = state.devices.find(
       (device) => device.deviceId === state.selectedDeviceId,
@@ -1591,16 +1740,17 @@ export async function executeAssistantIntent(
       : [{ title: intent.artist }];
   let query = requests[0];
   context.onStage?.("searching");
-  let music = await queryMusic(store, query, musicTransport, context.signal);
+  const retainLxCandidates = intent.action === "play_song" && !query.platform;
+  let music = await queryMusic(
+    store,
+    query,
+    musicTransport,
+    context.signal,
+    retainLxCandidates,
+  );
   checkExecution(context);
   if (intent.action === "play_artist") {
-    const artistTracks = popularArtist
-      ? assistantArtistQueue(popularArtist, music.tracks)
-      : music.tracks
-          .filter((track) =>
-            requestedArtistMatches(intent.artist, track.artist),
-          )
-          .slice(0, 100);
+    const artistTracks = assistantArtistQueue(intent.artist, music.tracks);
     if (!artistTracks.length)
       return {
         intent,
@@ -1651,7 +1801,13 @@ export async function executeAssistantIntent(
       )
     ) {
       query = requests[1];
-      music = await queryMusic(store, query, musicTransport, context.signal);
+      music = await queryMusic(
+        store,
+        query,
+        musicTransport,
+        context.signal,
+        retainLxCandidates,
+      );
     }
   }
   checkExecution(context);
@@ -1663,9 +1819,15 @@ export async function executeAssistantIntent(
     artist: query.artist,
   };
   if (!track) {
-    const message = !music.tracks.length
-      ? "没有从已启用的音乐源找到歌曲。"
-      : "没有找到符合歌名和歌手的候选，请补充更准确的信息。";
+    const message = query.platform
+      ? music.sourceErrors.length
+        ? PLATFORM_NAMES[query.platform] + "目录暂时无法访问，请稍后重试。"
+        : "在" +
+          PLATFORM_NAMES[query.platform] +
+          "没有找到匹配曲目，请检查歌名、歌手和该平台的音源设置。"
+      : !music.tracks.length
+        ? "没有从已启用的音乐源找到歌曲。"
+        : "没有找到符合歌名和歌手的候选，请补充更准确的信息。";
     return {
       intent: resolvedIntent,
       message,
@@ -1689,17 +1851,29 @@ export async function executeAssistantIntent(
       music: publicMusicResult(music),
     };
   }
-  await playback.replaceAndPlay(selected.deviceId, tracks, 0, context);
+  const alternates = assistantSongAlternates(track, music.lxCandidates ?? []);
+  const playing = await playback.replaceAndPlay(
+    selected.deviceId,
+    tracks,
+    0,
+    context,
+    alternates,
+  );
+  if (!playing) throw new Error("播放请求已变化");
+  const actual = playing.track;
+  const platform = actual.lx?.platform;
   return {
     intent: resolvedIntent,
     message:
       "已选取 " +
       tracks.length +
       " 首加入队列，正在播放《" +
-      track.title +
+      actual.title +
       "》，演唱者：" +
-      track.artist,
-    track: withoutPlayUrl(track),
+      actual.artist +
+      (isLxPlatform(platform) ? "（" + PLATFORM_NAMES[platform] + "）" : ""),
+    track: actual,
+    resolution: playing.resolution,
     playbackQueue: playback.queue(),
     device: selected.name,
     music: publicMusicResult(music),
@@ -1708,11 +1882,17 @@ export async function executeAssistantIntent(
 
 async function queryMusic(
   store: JsonStore,
-  request: { title: string; artist?: string },
+  request: MusicRequest,
   fetchImpl: typeof fetch = fetch,
   signal?: AbortSignal,
+  retainLxCandidates = false,
 ) {
-  return new MusicServices(store, fetchImpl).search(request, false, signal);
+  return new MusicServices(store, fetchImpl).search(
+    request,
+    false,
+    signal,
+    retainLxCandidates,
+  );
 }
 async function queryPlaylist(
   store: JsonStore,
@@ -1737,7 +1917,7 @@ function publicMusicResult(music: MusicSearchResult) {
     track: withoutPlayUrl(item.track),
   });
   return {
-    ...music,
+    sourceErrors: music.sourceErrors,
     tracks: music.tracks.map(withoutPlayUrl),
     selection:
       music.selection.status === "selected"
@@ -2110,6 +2290,7 @@ if (isMain) {
   const close = () =>
     server.close(async () => {
       await relay?.close();
+      await server.flushLogs();
       process.exit(0);
     });
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

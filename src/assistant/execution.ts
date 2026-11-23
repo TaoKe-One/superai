@@ -9,6 +9,7 @@ export type ExecutionStage =
   | "selected"
   | "resolving"
   | "retrying_playlist"
+  | "probing_song_sources"
   | "sending"
   | "accepted";
 export interface ExecutionContext {

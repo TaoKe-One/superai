@@ -10,6 +10,7 @@ const labels = {
   selected: "已选取匹配曲目",
   resolving: "解析音源并检查音频",
   paused_for_speech: "已发送音乐暂停，准备播报",
+  probing_song_sources: "并行检查同一曲目的可用音源",
   retrying_playlist: "首选歌单无法起播，正在查找其他相关歌单",
   sending: "发送设备命令",
   accepted: "音箱已受理，发声待确认",
@@ -19,6 +20,8 @@ const labels = {
   no_match: "未找到合适曲目，尚未播放",
   needs_input: "需要补充信息，尚未完成",
   waiting_reply: "已发出澄清播报，等待语音补充",
+  reply_wake_accepted: "音箱已受理重新收音请求",
+  reply_manual_wake: "可手动唤醒小爱后继续补充",
   reply_received: "带入上一轮澄清上下文",
   unconfirmed: "回执未确认，不会自动重发",
   cancelled: "后续处理已取消",
@@ -80,7 +83,11 @@ export function createVoicePanel({ api, toast, root = document }) {
             (followUp
               ? followUp.replyFrom > Date.now()
                 ? " · 澄清问题已提交播报"
-                : " · 等待补充，可唤醒小爱后直接回答"
+                : followUp.listenStatus === "accepted"
+                  ? " · 重新收音请求已受理，可直接补充"
+                  : followUp.listenStatus === "pending"
+                    ? " · 正在唤醒音箱收音"
+                    : " · 等待补充，可唤醒小爱后直接回答"
               : ""),
           "footnote",
         ),

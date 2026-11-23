@@ -17,6 +17,7 @@ import {
   fromLxSong,
   toLxSong,
   LxMusicService,
+  downloadLxScript,
 } from "../src/music/lx/service.ts";
 import { JsonStore } from "../src/storage/store.ts";
 import { PlaybackService } from "../src/playback/service.ts";
@@ -497,6 +498,123 @@ test("native LX routes require authentication and do not expose source scripts",
     /media-src 'self' https: http:/,
   );
   assert.equal((await fetch(base + "/lx/main.jsc")).status, 404);
+});
+
+test("LX URL imports retry transient responses and report the upstream status", async () => {
+  const url =
+    "https://raw.githubusercontent.com/example/project/main/source.js";
+  const response = (statusCode, headers = {}) => ({
+    statusCode,
+    headers,
+    raw: Buffer.from(statusCode === 200 ? source : "upstream error content"),
+  });
+
+  const calls = [];
+  const downloaded = await downloadLxScript(
+    url,
+    async (address, _options, signal) => {
+      calls.push({ address, signal });
+      return response(calls.length === 1 ? 503 : 200);
+    },
+  );
+  assert.equal(downloaded, source);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(
+    calls.map(({ address }) => address),
+    [url, url],
+  );
+  assert.equal(calls[0].signal, calls[1].signal);
+
+  for (const [status, headers, expectedCalls] of [
+    [404, {}, 1],
+    [503, { "retry-after": "60" }, 1],
+    [503, {}, 2],
+  ]) {
+    let count = 0;
+    await assert.rejects(
+      downloadLxScript(url, async () => {
+        count++;
+        return response(status, headers);
+      }),
+      (error) => error.message.endsWith("HTTP " + status + "）"),
+    );
+    assert.equal(count, expectedCalls);
+  }
+
+  await assert.rejects(
+    downloadLxScript("http://127.0.0.1/source.js", async () =>
+      assert.fail("private download reached transport"),
+    ),
+    /私有网络/,
+  );
+});
+
+test("a 2 MiB LX script can be uploaded, reloaded and used for playback", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "speaker-lx-large-upload-"));
+  const server = await createAppServer({ dataDir: dir });
+  t.after(async () => {
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+    await server.flushLogs();
+    await rm(dir, { recursive: true, force: true });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = "http://127.0.0.1:" + server.address().port;
+  const send = (path, body, cookie, method = "POST") =>
+    fetch(base + path, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  const admin = await send("/api/setup", { password: "test-only-password" });
+  assert.equal(admin.status, 201);
+  const cookie = admin.headers.get("set-cookie").split(";")[0];
+  const limit = 2 * 1024 * 1024;
+  const start = source + "\n/* 大脚本测试\n";
+  const end = "*/";
+  const script =
+    start + "\n".repeat(limit - Buffer.byteLength(start + end)) + end;
+  assert.equal(Buffer.byteLength(script), limit);
+  assert.ok(Buffer.byteLength(JSON.stringify({ script })) > limit);
+
+  const upload = await send("/api/lx/sources/import", { script }, cookie);
+  assert.equal(upload.status, 200, await upload.clone().text());
+  const imported = await upload.json();
+  assert.equal(imported.name, "Test Source");
+  assert.equal(imported.script, undefined);
+
+  const settings = await fetch(base + "/api/lx/settings", {
+    headers: { cookie },
+  });
+  assert.equal((await settings.json()).maxScriptBytes, limit);
+  const reopened = new JsonStore(dir);
+  await reopened.init();
+  const lx = new LxMusicService(
+    reopened,
+    async () =>
+      new Response(Buffer.concat([Buffer.from("ID3"), Buffer.alloc(100)]), {
+        status: 206,
+      }),
+  );
+  assert.equal((await lx.testSource(imported.id)).name, "Test Source");
+  assert.match(
+    (await lx.resolvePlayback(fromLxSong(rawSong))).url,
+    /^https:\/\/media\.example\/one\.mp3/,
+  );
+
+  const oversized = await send(
+    "/api/lx/sources/import",
+    { script: script + " " },
+    cookie,
+  );
+  assert.equal(oversized.status, 400);
+  assert.match((await oversized.json()).error, /2 MiB/);
+
+  const other = await send("/api/lx/settings", { script }, cookie, "PUT");
+  assert.equal(other.status, 413);
+  assert.equal((await other.json()).error, "request_too_large");
 });
 
 test("all five official catalog adapters retain source metadata for URL resolution", async () => {

@@ -172,12 +172,13 @@
       voiceId = result.voicePlayback?.id ?? "";
       lastRefreshError = "";
       state = result;
+      if (player)
+        player.playMode = nativeToMode[result.playbackMode] ?? "singlePlay";
       if (!result.device && !browserOutput) {
         browserOutput = true;
         if (player) {
           player.playlist = result.playbackQueue.tracks.map(song);
           player.currentIndex = result.playbackQueue.currentIndex;
-          player.playMode = nativeToMode[result.playbackMode] ?? "singlePlay";
         }
       }
       if (browserOutput) {
@@ -209,7 +210,6 @@
       if (player) {
         player.playlist = result.playbackQueue.tracks.map(song);
         player.currentIndex = result.playbackQueue.currentIndex;
-        player.playMode = nativeToMode[result.playbackMode] ?? "singlePlay";
         player.isCasting = true;
         player.castDevice = result.device
           ? {
@@ -380,7 +380,11 @@
       element.addEventListener(event, syncAudio);
     element.addEventListener("ended", () => {
       if (audio === element && browserOutput)
-        void perform(() => stepBrowser(1, true));
+        void perform(async () => {
+          await refresh();
+          if (audio === element && browserOutput && element.ended)
+            return stepBrowser(1, true);
+        });
     });
     element.addEventListener("error", () => {
       if (audio === element && browserOutput && element.getAttribute("src")) {
@@ -422,14 +426,11 @@
       next =
         (current + 1 + Math.floor(Math.random() * (tracks.length - 1))) %
         tracks.length;
-    else if (
-      ended &&
-      player.playMode === "singlePlay" &&
-      next >= tracks.length
-    ) {
+    else if (player.playMode === "singlePlay" && next >= tracks.length) {
       syncAudio();
       return false;
     }
+    if (player.playMode === "singlePlay") next = Math.max(0, next);
     return playInBrowser(tracks, (next + tracks.length) % tracks.length);
   }
   function attachPlayer(store) {
@@ -549,10 +550,6 @@
       perform(() => {
         const modes = Object.keys(modeToNative);
         const mode = modes[(modes.indexOf(store.playMode) + 1) % modes.length];
-        if (browserOutput) {
-          store.playMode = mode;
-          return;
-        }
         return api("/api/playback/mode", "PUT", { mode: modeToNative[mode] });
       });
     store.setVolume = (value) =>
@@ -918,13 +915,13 @@
   }
   async function openSources() {
     const { root, generation } = dialog("LX 音乐源管理");
-    root.append(
-      element(
-        "p",
-        "导入你有权使用、兼容 LX 的 .js 音源。搜索目录与播放地址分开处理；未导入音源时可以搜索，但无法播放。脚本只获得受限网络、缓冲区和加密 API，不能读取平台配置。",
-        "sp-help",
-      ),
+    const help = element(
+      "p",
+      "导入你有权使用、兼容 LX 的 .js 音源。搜索目录与播放地址分开处理；未导入音源时可以搜索，但无法播放。脚本只获得受限网络、缓冲区和加密 API，不能读取平台配置。",
+      "sp-help",
     );
+    root.append(help);
+    let maxScriptBytes;
     const form = element("div", undefined, "sp-form");
     const file = element("input");
     file.type = "file";
@@ -933,11 +930,14 @@
     form.append(
       file,
       button("导入文件", async () => {
-        if (!file.files?.length) throw new Error("请先选择音源文件");
-        if (file.files[0].size > 512 * 1024)
-          throw new Error("音源不能超过 512 KB");
+        const selected = file.files?.[0];
+        if (!selected) throw new Error("请先选择音源文件");
+        if (maxScriptBytes && selected.size > maxScriptBytes)
+          throw new Error(
+            "音源脚本不能超过 " + maxScriptBytes / (1024 * 1024) + " MiB",
+          );
         await api("/api/lx/sources/import", "POST", {
-          script: await file.files[0].text(),
+          script: await selected.text(),
         });
         await openSources();
       }),
@@ -1103,6 +1103,11 @@
         api("/api/lx/settings"),
       ]);
       if (generation !== dialogGeneration) return;
+      maxScriptBytes = settings.maxScriptBytes;
+      if (maxScriptBytes)
+        help.append(
+          "单个脚本最大 " + maxScriptBytes / (1024 * 1024) + " MiB。",
+        );
       quality.value = settings.quality;
       fallback.checked = settings.qualityFallback;
       if (!sources.length)

@@ -3,10 +3,17 @@ import test from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setImmediate as tickIO } from "node:timers/promises";
 import { UnderstandingAgent, splitCommands } from "../src/assistant/planner.ts";
 import { IntentRouter } from "../src/assistant/router.ts";
-import { OpenAICompatibleIntentClassifier } from "../src/assistant/llm.ts";
-import { ExecutionAgent } from "../src/assistant/execution.ts";
+import {
+  normalizeModelIntent,
+  OpenAICompatibleIntentClassifier,
+} from "../src/assistant/llm.ts";
+import {
+  ExecutionAgent,
+  estimatedSpeechMs,
+} from "../src/assistant/execution.ts";
 import { VoiceCoordinator } from "../src/assistant/coordinator.ts";
 import { VoiceConversationMonitor } from "../src/assistant/voice-monitor.ts";
 import { PlaybackService } from "../src/playback/service.ts";
@@ -775,6 +782,225 @@ test("follow-up context expires and an unconfirmed TTS never opens a reply windo
   await until(() => coordinator.snapshot()[0]?.status === "unconfirmed");
   assert.deepEqual(histories.at(-1).history, []);
   assert.deepEqual(coordinator.waitingForReplies(), []);
+});
+
+test("voice clarification wakes the same speaker after each prompt and stops when answered", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const events = [];
+  const wakeCalls = [];
+  const seenHistory = [];
+  const firstPrompt = "你想听哪位歌手？";
+  const secondPrompt = "你想听哪一首歌？";
+  const coordinator = new VoiceCoordinator(
+    () =>
+      new UnderstandingAgent(
+        new IntentRouter({
+          async classify(text, history) {
+            seenHistory.push(history.map((turn) => turn.content));
+            if (text === "晴天")
+              return {
+                action: "play_song",
+                title: text,
+                artist: "周杰伦",
+                confidence: 1,
+                source: "llm",
+              };
+            return {
+              action: "clarify",
+              question: text === "周杰伦" ? secondPrompt : firstPrompt,
+              confidence: 1,
+              source: "llm",
+            };
+          },
+        }),
+      ),
+    new ExecutionAgent(async (intent, _text, context) => {
+      context.onStage("sending");
+      context.onStage("accepted");
+      events.push(intent.action);
+      return intent.action === "clarify"
+        ? { message: intent.question, spokenPrompt: intent.question }
+        : { message: "已播放晴天" };
+    }),
+    undefined,
+    async (id) => {
+      wakeCalls.push(id);
+      return wakeCalls.length === 1 ? "accepted" : "unconfirmed";
+    },
+  );
+  t.after(() => coordinator.stop());
+
+  coordinator.submit(device("a"), "想听一首歌", 1);
+  await tickIO();
+  assert.equal(coordinator.waitingForReplies()[0].listenStatus, "pending");
+  t.mock.timers.tick(estimatedSpeechMs(firstPrompt) - 1);
+  await tickIO();
+  assert.deepEqual(wakeCalls, []);
+  t.mock.timers.tick(1);
+  await tickIO();
+  assert.deepEqual(wakeCalls, ["a"]);
+  assert.equal(coordinator.waitingForReplies()[0].listenStatus, "accepted");
+  assert.ok(
+    coordinator
+      .snapshot()[0]
+      .stages.some(({ name }) => name === "reply_wake_accepted"),
+  );
+
+  coordinator.submit(device("a"), "周杰伦", 2);
+  await tickIO();
+  t.mock.timers.tick(estimatedSpeechMs(secondPrompt));
+  await tickIO();
+  assert.deepEqual(wakeCalls, ["a", "a"]);
+  assert.equal(coordinator.waitingForReplies()[0].listenStatus, "unconfirmed");
+  assert.ok(
+    coordinator
+      .snapshot()[0]
+      .stages.some(({ name }) => name === "reply_manual_wake"),
+  );
+
+  coordinator.submit(device("a"), "晴天", 3);
+  await tickIO();
+  assert.deepEqual(seenHistory.at(-1), [
+    "想听一首歌",
+    firstPrompt,
+    "周杰伦",
+    secondPrompt,
+  ]);
+  assert.deepEqual(events, ["clarify", "clarify", "play_song"]);
+  assert.deepEqual(coordinator.waitingForReplies(), []);
+  t.mock.timers.tick(60_000);
+  await tickIO();
+  assert.deepEqual(wakeCalls, ["a", "a"]);
+});
+
+test("a reply during the prompt or removing its speaker cancels scheduled wake", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000_000 });
+  const wakeCalls = [];
+  const coordinator = new VoiceCoordinator(
+    () =>
+      new UnderstandingAgent(
+        new IntentRouter({
+          async classify(text) {
+            return text === "补充完了"
+              ? {
+                  action: "answer",
+                  question: text,
+                  answer: "收到",
+                  confidence: 1,
+                  source: "llm",
+                }
+              : {
+                  action: "clarify",
+                  question: "请补充一下",
+                  confidence: 1,
+                  source: "llm",
+                };
+          },
+        }),
+      ),
+    new ExecutionAgent(async (intent, _text, context) => {
+      context.onStage("accepted");
+      return intent.action === "clarify"
+        ? { message: intent.question, spokenPrompt: intent.question }
+        : { message: intent.answer };
+    }),
+    undefined,
+    async (id) => {
+      wakeCalls.push(id);
+      return "accepted";
+    },
+  );
+  t.after(() => coordinator.stop());
+  coordinator.submit(device("a"), "先问一下", 1);
+  coordinator.submit(device("b"), "也问一下", 2);
+  await tickIO();
+  assert.equal(coordinator.waitingForReplies().length, 2);
+  coordinator.submit(device("a"), "补充完了", 3);
+  coordinator.retainDevices(new Set(["a"]));
+  await tickIO();
+  t.mock.timers.tick(8000);
+  await tickIO();
+  assert.deepEqual(wakeCalls, []);
+  assert.deepEqual(coordinator.waitingForReplies(), []);
+});
+
+test("voice playback modes update shared state without restarting the queue", async (t) => {
+  const { store } = await setup(t);
+  await store.update((state) => {
+    state.config.playbackQueue = {
+      tracks: [
+        {
+          id: "song",
+          sourceId: "fixture",
+          artist: "测试歌手",
+          title: "测试歌曲",
+          playUrl: store.encrypt("https://media.example/song.mp3"),
+        },
+      ],
+      currentIndex: 0,
+    };
+  });
+  const oldQueue = store.snapshot().config.playbackQueue;
+  const miot = {
+    execute: async () => assert.fail("mode change sent a playback command"),
+  };
+  const router = new IntentRouter({
+    async classify() {
+      assert.fail("an explicit mode command reached the model");
+    },
+  });
+  for (const [phrase, mode] of [
+    ["小爱同学，切换到随机播放", "random"],
+    ["把播放模式改成列表循环", "loop"],
+    ["开启单曲循环", "single"],
+    ["关闭单曲循环", "order"],
+    ["按顺序播放", "order"],
+  ]) {
+    const intent = await router.route(phrase);
+    assert.equal(intent.action, "set_playback_mode", phrase);
+    const result = await executeAssistantIntent(
+      intent,
+      phrase,
+      store,
+      miot,
+      fetch,
+      {
+        origin: "voice",
+        deviceId: "a",
+      },
+    );
+    assert.equal(result.playbackMode, mode);
+    assert.equal(store.snapshot().config.playbackMode, mode);
+    assert.deepEqual(store.snapshot().config.playbackQueue, oldQueue);
+  }
+  const llmMode = normalizeModelIntent(
+    {
+      action: "set_playback_mode",
+      mode: "random",
+      confidence: 0.95,
+    },
+    "这几首不用按原来的谁先谁后",
+  );
+  assert.equal(llmMode.mode, "random");
+  assert.throws(
+    () =>
+      normalizeModelIntent(
+        {
+          action: "set_playback_mode",
+          mode: "something",
+        },
+        "播放模式",
+      ),
+    /未知播放模式/,
+  );
+  assert.equal(
+    (await new IntentRouter().route("播放《单曲循环》")).action,
+    "play_song",
+  );
+  assert.equal(
+    (await new IntentRouter().route("切换空调模式")).action,
+    "native",
+  );
 });
 
 test("a cancelled private-library request cannot poison the next request through the adapter cache", async (t) => {

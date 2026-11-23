@@ -1,6 +1,9 @@
+import type { LxPlatform } from "./lx/platforms.ts";
+
 export interface MusicRequest {
   title: string;
   artist?: string;
+  platform?: LxPlatform;
 }
 
 export interface MusicTrack {

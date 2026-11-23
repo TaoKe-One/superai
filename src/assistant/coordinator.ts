@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { MiotActionDelivery } from "../miot/speech.ts";
 import { UnderstandingAgent, type PlannedTask } from "./planner.ts";
 import {
   ExecutionAgent,
@@ -11,6 +12,14 @@ import { DeviceCommandError } from "../miot/client.ts";
 import { LxResolutionError } from "../music/lx/health.ts";
 
 const HISTORY_MS = 2 * 60_000;
+type ListenStatus = MiotActionDelivery | "pending" | "unavailable";
+type VoiceHistory = {
+  turns: ConversationTurn[];
+  expiresAt: number;
+  replyFrom?: number;
+  listenStatus?: ListenStatus;
+  wakeController?: AbortController;
+};
 
 export interface VoiceEvent {
   id: string;
@@ -38,28 +47,30 @@ export interface VoiceEvent {
 export class VoiceCoordinator {
   private readonly understand: (deviceId: string) => UnderstandingAgent;
   private readonly executor: ExecutionAgent;
+  private readonly onResult?: (status: VoiceEvent["status"]) => void;
   private readonly events: VoiceEvent[] = [];
   private readonly jobs = new Map<
     string,
     { controller: AbortController; done: Promise<void> }
   >();
-  private readonly histories = new Map<
-    string,
-    {
-      turns: ConversationTurn[];
-      expiresAt: number;
-      replyFrom?: number;
-    }
-  >();
+  private readonly histories = new Map<string, VoiceHistory>();
+  private readonly wakeForReply?: (
+    deviceId: string,
+    signal: AbortSignal,
+  ) => Promise<MiotActionDelivery | "unavailable">;
   private readonly seen = new Set<string>();
   private stopped = false;
 
   constructor(
     understand: (deviceId: string) => UnderstandingAgent,
     executor: ExecutionAgent,
+    onResult?: (status: VoiceEvent["status"]) => void,
+    wakeForReply?: VoiceCoordinator["wakeForReply"],
   ) {
     this.understand = understand;
     this.executor = executor;
+    this.onResult = onResult;
+    this.wakeForReply = wakeForReply;
   }
 
   snapshot() {
@@ -74,6 +85,7 @@ export class VoiceCoordinator {
               deviceId,
               replyFrom: history.replyFrom,
               expiresAt: history.expiresAt,
+              listenStatus: history.listenStatus,
             },
           ]
         : [],
@@ -112,6 +124,7 @@ export class VoiceCoordinator {
     };
     this.events.unshift(event);
     this.events.length = Math.min(this.events.length, 100);
+    this.histories.get(device.deviceId)?.wakeController?.abort();
     const previous = this.jobs.get(device.deviceId);
     previous?.controller.abort();
     const controller = new AbortController();
@@ -123,6 +136,7 @@ export class VoiceCoordinator {
         event.message = "语音任务未完成";
       })
       .finally(() => {
+        this.onResult?.(event.status);
         if (this.jobs.get(device.deviceId)?.controller === controller)
           this.jobs.delete(device.deviceId);
       });
@@ -135,13 +149,18 @@ export class VoiceCoordinator {
       this.seen.clear();
     }
     for (const job of this.jobs.values()) job.controller.abort();
+    for (const history of this.histories.values())
+      history.wakeController?.abort();
     this.histories.clear();
   }
 
   retainDevices(ids: Set<string>) {
     for (const [id, job] of this.jobs) if (!ids.has(id)) job.controller.abort();
-    for (const id of this.histories.keys())
-      if (!ids.has(id)) this.histories.delete(id);
+    for (const [id, history] of this.histories)
+      if (!ids.has(id)) {
+        history.wakeController?.abort();
+        this.histories.delete(id);
+      }
   }
 
   async stop() {
@@ -150,15 +169,50 @@ export class VoiceCoordinator {
     await Promise.allSettled([...this.jobs.values()].map((job) => job.done));
   }
 
+  private wakeAfterPrompt(
+    deviceId: string,
+    history: VoiceHistory,
+    stage: (name: string) => void,
+  ) {
+    const wake = this.wakeForReply;
+    if (!wake || history.replyFrom === undefined) return;
+    const controller = new AbortController();
+    history.wakeController = controller;
+    history.listenStatus = "pending";
+    const timer = setTimeout(
+      async () => {
+        const remaining = history.expiresAt - Date.now();
+        if (controller.signal.aborted || remaining <= 0) return;
+        const signal = AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(remaining),
+        ]);
+        const status = await wake(deviceId, signal).catch(
+          () => "unconfirmed" as const,
+        );
+        if (signal.aborted || this.histories.get(deviceId) !== history) return;
+        history.listenStatus = status;
+        stage(
+          status === "accepted" ? "reply_wake_accepted" : "reply_manual_wake",
+        );
+      },
+      Math.max(0, history.replyFrom - Date.now()),
+    );
+    timer.unref();
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), {
+      once: true,
+    });
+  }
+
   private async run(event: VoiceEvent, signal: AbortSignal) {
     let sending = false;
     let accepted = false;
     let index = -1;
-    const stage = (name: string) => {
+    const stage = (name: string, task = index) => {
       event.stages.push({
         name,
         at: Date.now(),
-        ...(index >= 0 ? { task: index } : {}),
+        ...(task >= 0 ? { task } : {}),
       });
       if (event.stages.length > 40) event.stages.shift();
     };
@@ -238,15 +292,26 @@ export class VoiceCoordinator {
             replyFrom = now + estimatedSpeechMs(result.spokenPrompt);
             stage("waiting_reply");
           }
-          this.histories.set(event.deviceId, {
+          this.histories.get(event.deviceId)?.wakeController?.abort();
+          const currentHistory = {
             turns: history.slice(-12),
             expiresAt:
               replyFrom === undefined
                 ? now + HISTORY_MS
                 : replyFrom + VOICE_REPLY_WINDOW_MS,
             replyFrom,
-          });
+          };
+          this.histories.set(event.deviceId, currentHistory);
         }
+      }
+      const followUp = this.histories.get(event.deviceId);
+      if (!signal.aborted && followUp?.replyFrom !== undefined) {
+        const promptTask = event.tasks.findLastIndex(
+          (task) => task.status === "needs_input",
+        );
+        this.wakeAfterPrompt(event.deviceId, followUp, (name) =>
+          stage(name, promptTask),
+        );
       }
       event.status = event.tasks.some((task) => task.status === "failed")
         ? "failed"

@@ -27,8 +27,11 @@ export interface ResolutionAttempt {
 }
 export class LxResolutionError extends Error {
   readonly attempts: ResolutionAttempt[];
-  constructor(attempts: ResolutionAttempt[]) {
-    super("已启用的 LX 音源均未返回可播放音频，请查看音源检测结果或更换音源");
+  constructor(
+    attempts: ResolutionAttempt[],
+    message = "已启用的 LX 音源均未返回可播放音频，请查看音源检测结果或更换音源",
+  ) {
+    super(message);
     this.attempts = attempts;
   }
 }

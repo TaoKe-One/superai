@@ -1,3 +1,6 @@
+import type { LxPlatform } from "../music/lx/platforms.ts";
+import type { PlaybackMode } from "../playback/mode.ts";
+
 export type ControlCommand = "pause" | "resume" | "next" | "previous" | "stop";
 export type ExecutableControlCommand = ControlCommand | "volume";
 
@@ -17,6 +20,7 @@ export type AssistantIntent =
       action: "play_song";
       title: string;
       artist?: string;
+      platform?: LxPlatform;
       confidence: number;
       source: "rules" | "llm" | "fallback";
     }
@@ -36,6 +40,12 @@ export type AssistantIntent =
   | {
       action: "control";
       command: ControlCommand;
+      confidence: number;
+      source: "rules" | "llm" | "fallback";
+    }
+  | {
+      action: "set_playback_mode";
+      mode: PlaybackMode;
       confidence: number;
       source: "rules" | "llm" | "fallback";
     }
@@ -64,8 +74,10 @@ export type AssistantIntent =
 export interface ModelIntent {
   action: AssistantIntent["action"];
   volume?: number;
+  mode?: PlaybackMode;
   title?: string;
   artist?: string;
+  platform?: LxPlatform;
   preference?: "popular";
   playlist?: string;
   command?: ControlCommand;

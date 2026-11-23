@@ -8,7 +8,13 @@ import { IntentRouter } from "../src/assistant/router.ts";
 import { UnderstandingAgent } from "../src/assistant/planner.ts";
 import { ExecutionAgent } from "../src/assistant/execution.ts";
 import { VoiceCoordinator } from "../src/assistant/coordinator.ts";
-import { assistantSongQueue } from "../src/music/assistant-selection.ts";
+import {
+  assistantSongAlternates,
+  assistantSongQueue,
+} from "../src/music/assistant-selection.ts";
+import { normalizeModelIntent } from "../src/assistant/llm.ts";
+import { LxMusicService } from "../src/music/lx/service.ts";
+import { catalogFixture, json } from "./helpers/lx-fixture.mjs";
 import {
   createAppServer,
   executeAssistantIntent,
@@ -91,6 +97,9 @@ test("configured model interprets a natural artist request before legacy music r
     track("cover", "晴天", "其他歌手"),
     track("two", "稻香", "周杰伦"),
     track("three", "七里香", "周杰伦"),
+    ...Array.from({ length: 22 }, (_, index) =>
+      track("extra-" + index, "歌曲 " + index, "周杰伦"),
+    ),
   ];
   const result = await executeAssistant(
     phrase,
@@ -127,9 +136,42 @@ test("configured model interprets a natural artist request before legacy music r
   assert.deepEqual(requests, ["model", "周杰伦"]);
   assert.deepEqual(
     result.playbackQueue.tracks.map((t) => t.id),
-    ["one", "two", "three"],
+    [
+      "one",
+      "two",
+      "three",
+      ...Array.from({ length: 17 }, (_, index) => "extra-" + index),
+    ],
   );
   assert.deepEqual(sent, [["play", "https://media.example/one.mp3"]]);
+});
+
+test("plain artist requests queue up to 20 distinct tracks and play the first", async (t) => {
+  const store = await setup(t);
+  const tracks = Array.from({ length: 24 }, (_, index) =>
+    track("song-" + index, "歌曲 " + index, "周杰伦"),
+  );
+  const sent = [];
+  const result = await executeAssistant(
+    "想听周杰伦的歌",
+    store,
+    { execute: async (_id, command, args) => sent.push([command, args.url]) },
+    async () =>
+      Response.json({
+        tracks: [
+          track("cover", "歌曲 0", "其他歌手"),
+          tracks[0],
+          { ...tracks[0], id: "alternate", album: "另一张专辑" },
+          ...tracks.slice(1),
+        ],
+      }),
+  );
+  assert.equal(result.intent.action, "play_artist");
+  assert.deepEqual(
+    store.snapshot().config.playbackQueue.tracks.map(({ id }) => id),
+    tracks.slice(0, 20).map(({ id }) => id),
+  );
+  assert.deepEqual(sent, [["play", "https://media.example/song-0.mp3"]]);
 });
 
 test("the reported phrase falls back to artist playback if the configured model is unavailable", async () => {
@@ -445,4 +487,432 @@ test("HTTP cloud speech stops native music once, queues ranked songs and casts t
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(calls.filter((x) => x === "stop").length, 1);
   assert.equal(calls.filter((x) => x.startsWith("play:")).length, 1);
+});
+
+async function onlineSongSetup(
+  t,
+  {
+    modifyQq,
+    cancelOnProbe,
+    mediaResponse,
+    firstWorks = false,
+    platforms = ["wy", "tx"],
+  } = {},
+) {
+  const store = await setup(t);
+  await store.update((s) => {
+    s.config.musicServices.mode = "online";
+  });
+  const searched = [];
+  const probes = [];
+  const media = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(2048)]);
+  const fetchImpl = async (input, options) => {
+    const url = new URL(input);
+    if (url.hostname.endsWith(".example")) {
+      probes.push(url.hostname);
+      cancelOnProbe?.(url.hostname);
+      if (mediaResponse) return mediaResponse(url, options.signal, media);
+      // Keep the WY failure observable before the QQ success in the diagnostics.
+      if (url.hostname === "tx.example")
+        await new Promise((resolve) => setTimeout(resolve, 15));
+      return url.hostname.startsWith("wy") && !firstWorks
+        ? new Response("<html>unavailable</html>")
+        : new Response(media, { status: 206 });
+    }
+    const catalog = catalogFixture(input);
+    if (url.hostname.includes("qq.com")) {
+      searched.push("tx");
+      const qq =
+        catalog["music.search.SearchCgiService"].data.body.song.list[0];
+      modifyQq?.(qq);
+    } else if (url.hostname.endsWith("163.com")) searched.push("wy");
+    else if (url.hostname.includes("kugou")) searched.push("kg");
+    else if (url.hostname.includes("kuwo")) searched.push("kw");
+    else if (url.hostname.includes("migu")) searched.push("mg");
+    else assert.fail("unexpected catalog host " + url.hostname);
+    return json(catalog);
+  };
+  const lx = new LxMusicService(store, fetchImpl);
+  const sources = Object.fromEntries(
+    platforms.map((platform) => [
+      platform,
+      { actions: ["musicUrl"], qualitys: ["128k"] },
+    ]),
+  );
+  await lx.importScript(
+    'lx.send("inited",' +
+      JSON.stringify({ sources }) +
+      ");" +
+      'lx.on("request",({source,info})=>"https://"+source+".example/"+info.musicInfo.songmid);',
+  );
+  return { store, lx, fetchImpl, searched, probes };
+}
+
+test("a failed catalog recording falls back to the same recording using the other catalog's song ID", async (t) => {
+  const { store, fetchImpl, searched, probes } = await onlineSongSetup(t);
+  const phrase = "播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  const deviceCommands = [],
+    stages = [];
+  const result = await executeAssistantIntent(
+    intent,
+    phrase,
+    store,
+    { execute: async (...args) => deviceCommands.push(args) },
+    fetchImpl,
+    { deviceId: "speaker", onStage: (stage) => stages.push(stage) },
+  );
+  assert.deepEqual(searched.sort(), ["tx", "wy"]);
+  assert.deepEqual(probes, ["wy.example", "tx.example"]);
+  assert.equal(deviceCommands.length, 1);
+  assert.equal(deviceCommands[0][2].url, "https://tx.example/qq-one");
+  assert.equal(result.track.sourceId, "lx-tx");
+  assert.equal(result.resolution.platform, "tx");
+  assert.deepEqual(
+    result.resolution.attempts.map((item) => [item.platform, item.ok]),
+    [
+      ["wy", false],
+      ["tx", true],
+    ],
+  );
+  assert.equal(result.music.lxCandidates, undefined);
+  assert.deepEqual(
+    result.playbackQueue.tracks.map((track) => track.id),
+    ["qq-one"],
+  );
+  assert.equal(
+    store.snapshot().config.playbackHistory[0].track.sourceId,
+    "lx-tx",
+  );
+  assert.ok(stages.includes("probing_song_sources"));
+  assert.ok(stages.indexOf("probing_song_sources") < stages.indexOf("sending"));
+});
+
+test("explicit QQ platform stays pinned when parsed offline or by the model", async (t) => {
+  const { store, fetchImpl, searched, probes } = await onlineSongSetup(t);
+  const phrase = "用 QQ 音乐播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  assert.equal(intent.platform, "tx");
+  assert.equal(
+    normalizeModelIntent({ action: "play_song", title: "晴天" }, phrase)
+      .platform,
+    "tx",
+  );
+  const result = await executeAssistantIntent(
+    intent,
+    phrase,
+    store,
+    { execute: async () => {} },
+    fetchImpl,
+    { deviceId: "speaker" },
+  );
+  assert.deepEqual(searched, ["tx"]);
+  assert.deepEqual(probes, ["tx.example"]);
+  assert.equal(result.track.sourceId, "lx-tx");
+});
+
+test("a different recording or artist cannot be used as an audio fallback", async (t) => {
+  const first = {
+    title: "晴天",
+    artist: "周杰伦",
+    album: "测试专辑",
+    durationSeconds: 269,
+    lx: { platform: "wy" },
+  };
+  const alternate = { ...first, lx: { platform: "tx" } };
+  assert.deepEqual(
+    assistantSongAlternates(first, [
+      { ...alternate, title: "晴天 (Live)" },
+      { ...alternate, artist: "其他" },
+      { ...alternate, durationSeconds: 205 },
+      { ...alternate, album: "现场合辑" },
+    ]),
+    [],
+  );
+  const { store, fetchImpl, probes } = await onlineSongSetup(t, {
+    modifyQq: (entry) => {
+      entry.interval = 200;
+    },
+  });
+  const phrase = "播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  await assert.rejects(
+    executeAssistantIntent(
+      intent,
+      phrase,
+      store,
+      { execute: async () => assert.fail("cast a nonmatching recording") },
+      fetchImpl,
+      { deviceId: "speaker" },
+    ),
+    /未返回可播放音频/,
+  );
+  assert.deepEqual(probes, ["wy.example"]);
+});
+
+test("cancellation stops probes and an uncertain speaker response precludes a second cast", async (t) => {
+  const phrase = "播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  const controller = new AbortController();
+  const cancelled = await onlineSongSetup(t, {
+    cancelOnProbe: () => controller.abort(Error("cancelled")),
+  });
+  await assert.rejects(
+    executeAssistantIntent(
+      intent,
+      phrase,
+      cancelled.store,
+      { execute: async () => assert.fail("cast after cancellation") },
+      cancelled.fetchImpl,
+      { deviceId: "speaker", signal: controller.signal },
+    ),
+    /cancelled/,
+  );
+  assert.ok(cancelled.probes.includes("wy.example"));
+  assert.deepEqual(cancelled.store.snapshot().config.playbackHistory, []);
+
+  const uncertain = await onlineSongSetup(t, { firstWorks: true });
+  let sends = 0;
+  await assert.rejects(
+    executeAssistantIntent(
+      intent,
+      phrase,
+      uncertain.store,
+      {
+        execute: async () => {
+          sends++;
+          throw Error("speaker timeout");
+        },
+      },
+      uncertain.fetchImpl,
+      { deviceId: "speaker" },
+    ),
+    /speaker timeout/,
+  );
+  assert.deepEqual(uncertain.probes.sort(), ["tx.example", "wy.example"]);
+  assert.equal(sends, 1);
+  assert.deepEqual(uncertain.store.snapshot().config.playbackHistory, []);
+});
+
+function pendingProbe(signal, onCancel) {
+  return new Promise((_resolve, reject) => {
+    const cancel = () => {
+      onCancel();
+      reject(signal.reason);
+    };
+    if (signal.aborted) cancel();
+    else signal.addEventListener("abort", cancel, { once: true });
+  });
+}
+
+test("a ready QQ recording beats a pending NetEase probe, which is cancelled without a health penalty", async (t) => {
+  const started = Promise.withResolvers();
+  let slowCancelled = false;
+  const { store, fetchImpl } = await onlineSongSetup(t, {
+    mediaResponse: async (url, signal, media) => {
+      if (url.hostname === "wy.example") {
+        started.resolve();
+        return pendingProbe(signal, () => {
+          slowCancelled = true;
+        });
+      }
+      await started.promise;
+      return new Response(media, { status: 206 });
+    },
+  });
+  const phrase = "播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  const commands = [];
+  const result = await executeAssistantIntent(
+    intent,
+    phrase,
+    store,
+    { execute: async (...args) => commands.push(args) },
+    fetchImpl,
+    { deviceId: "speaker", signal: AbortSignal.timeout(1000) },
+  );
+  assert.equal(slowCancelled, true);
+  assert.equal(result.track.sourceId, "lx-tx");
+  assert.equal(commands.length, 1);
+  assert.equal(store.snapshot().config.lxSources[0].health.wy, undefined);
+  assert.equal(store.snapshot().config.lxSources[0].health.tx.successes, 1);
+});
+
+test("a pinned platform races its own sources and leaves the other catalog untouched", async (t) => {
+  const started = Promise.withResolvers();
+  const { store, lx, fetchImpl, searched, probes } = await onlineSongSetup(t, {
+    mediaResponse: async (url, signal, media) => {
+      if (url.hostname === "tx.example") {
+        started.resolve();
+        return pendingProbe(signal, () => {});
+      }
+      await started.promise;
+      return new Response(media, { status: 206 });
+    },
+  });
+  const fast = await lx.importScript(
+    'lx.send("inited",{sources:{tx:{actions:["musicUrl"],qualitys:["128k"]}}});' +
+      'lx.on("request",()=>"https://fast.example/qq-one");',
+  );
+  const phrase = "用 QQ 音乐播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  const commands = [];
+  const result = await executeAssistantIntent(
+    intent,
+    phrase,
+    store,
+    { execute: async (...args) => commands.push(args) },
+    fetchImpl,
+    { deviceId: "speaker", signal: AbortSignal.timeout(1000) },
+  );
+  assert.deepEqual(searched, ["tx"]);
+  assert.deepEqual(probes, ["tx.example", "fast.example"]);
+  assert.equal(result.resolution.sourceId, fast.id);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0][2].url, "https://fast.example/qq-one");
+});
+
+test("a failed wave advances to the next source with at most three active audio probes", async (t) => {
+  let active = 0,
+    peak = 0;
+  const started = Promise.withResolvers();
+  const { store, lx, fetchImpl, probes } = await onlineSongSetup(t, {
+    mediaResponse: async (url, signal, media) => {
+      active++;
+      peak = Math.max(peak, active);
+      try {
+        if (url.hostname === "fourth.example")
+          return new Response(media, { status: 206 });
+        if (active === 3) started.resolve();
+        await started.promise;
+        return new Response("<html>unavailable</html>");
+      } finally {
+        active--;
+      }
+    },
+  });
+  for (const name of ["second", "third", "fourth"]) {
+    await lx.importScript(
+      'lx.send("inited",{sources:{tx:{actions:["musicUrl"],qualitys:["128k"]}}});' +
+        'lx.on("request",()=>"https://' +
+        name +
+        '.example/qq-one");',
+    );
+  }
+  const phrase = "用 QQ 音乐播放《晴天》";
+  const intent = await new IntentRouter().route(phrase);
+  const commands = [];
+  const result = await executeAssistantIntent(
+    intent,
+    phrase,
+    store,
+    { execute: async (...args) => commands.push(args) },
+    fetchImpl,
+    { deviceId: "speaker", signal: AbortSignal.timeout(1000) },
+  );
+  assert.deepEqual(probes, [
+    "tx.example",
+    "second.example",
+    "third.example",
+    "fourth.example",
+  ]);
+  assert.equal(peak, 3);
+  assert.equal(result.resolution.attempts.filter((item) => !item.ok).length, 3);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0][2].url, "https://fourth.example/qq-one");
+});
+
+test("Kuwo and Kugou join the first four platform probes while Migu stays in reserve", async (t) => {
+  const started = new Set();
+  const allPrimaryStarted = Promise.withResolvers();
+  const { store, fetchImpl, searched, probes } = await onlineSongSetup(t, {
+    platforms: ["wy", "tx", "kg", "kw", "mg"],
+    mediaResponse: async (url, signal, media) => {
+      if (url.hostname === "mg.example")
+        return new Response(media, { status: 206 });
+      started.add(url.hostname);
+      if (started.size === 4) allPrimaryStarted.resolve();
+      if (url.hostname === "kw.example") {
+        await allPrimaryStarted.promise;
+        return new Response(media, { status: 206 });
+      }
+      return pendingProbe(signal, () => {});
+    },
+  });
+  const phrase = "播放《晴天》";
+  const commands = [];
+  const result = await executeAssistantIntent(
+    await new IntentRouter().route(phrase),
+    phrase,
+    store,
+    { execute: async (...args) => commands.push(args) },
+    fetchImpl,
+    { deviceId: "speaker", signal: AbortSignal.timeout(1000) },
+  );
+  assert.deepEqual([...new Set(searched)].sort(), [
+    "kg",
+    "kw",
+    "mg",
+    "tx",
+    "wy",
+  ]);
+  assert.deepEqual(probes.sort(), [
+    "kg.example",
+    "kw.example",
+    "tx.example",
+    "wy.example",
+  ]);
+  assert.equal(result.track.sourceId, "lx-kw");
+  assert.equal(commands.length, 1);
+});
+
+test("Migu is probed after all four primary catalogs fail and directly when requested", async (t) => {
+  const failedPlatforms = [];
+  const { store, fetchImpl, searched, probes } = await onlineSongSetup(t, {
+    platforms: ["wy", "tx", "kg", "kw", "mg"],
+    mediaResponse: async (url, _signal, media) => {
+      if (url.hostname === "mg.example")
+        return new Response(media, { status: 206 });
+      if (url.hostname === "kw.example")
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      failedPlatforms.push(url.hostname);
+      return new Response("<html>unavailable</html>");
+    },
+  });
+  const router = new IntentRouter();
+  const commands = [];
+  const cast = (phrase) =>
+    router
+      .route(phrase)
+      .then((intent) =>
+        executeAssistantIntent(
+          intent,
+          phrase,
+          store,
+          { execute: async (...args) => commands.push(args) },
+          fetchImpl,
+          { deviceId: "speaker", signal: AbortSignal.timeout(1000) },
+        ),
+      );
+  const automatic = await cast("播放《晴天》");
+  assert.equal(automatic.track.sourceId, "lx-mg");
+  assert.equal(failedPlatforms.length, 4);
+  assert.equal(probes.at(-1), "mg.example");
+  assert.deepEqual(probes.slice(0, -1).sort(), [
+    "kg.example",
+    "kw.example",
+    "tx.example",
+    "wy.example",
+  ]);
+  assert.equal(
+    automatic.resolution.attempts.filter((attempt) => !attempt.ok).length,
+    4,
+  );
+  assert.equal(commands.length, 1);
+  probes.length = 0;
+  searched.length = 0;
+  assert.equal((await cast("用咪咕音乐播放《晴天》")).track.sourceId, "lx-mg");
+  assert.deepEqual(probes, ["mg.example"]);
+  assert.deepEqual(searched, ["mg"]);
+  assert.equal(commands.length, 2);
 });

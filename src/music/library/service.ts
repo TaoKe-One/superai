@@ -4,7 +4,7 @@ import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { JsonStore } from "../../storage/store.ts";
-import type { MusicTrack } from "../types.ts";
+import type { MusicRequest, MusicTrack } from "../types.ts";
 import {
   LibraryAdapter,
   libraryFingerprint,
@@ -122,9 +122,10 @@ export class MusicServices {
     return result;
   }
   async search(
-    request: { title: string; artist?: string },
+    request: MusicRequest,
     privateOnly = false,
     signal?: AbortSignal,
+    retainLxCandidates = false,
   ) {
     const reader = signal
       ? new MusicServices(
@@ -136,7 +137,12 @@ export class MusicServices {
       mode = config.musicServices.mode;
     if (privateOnly && !["private", "hybrid"].includes(mode))
       throw new Error("请先启用私人音乐库模式");
-    if (privateOnly || mode === "private" || mode === "hybrid") {
+    if (request.platform && (privateOnly || mode === "private"))
+      throw new Error("当前搜索只使用私人音乐库，无法搜索指定的在线平台");
+    if (
+      !request.platform &&
+      (privateOnly || mode === "private" || mode === "hybrid")
+    ) {
       const sources = config.musicServices.libraries
         .filter((l) => l.enabled)
         .map((l) => ({
@@ -163,7 +169,7 @@ export class MusicServices {
         return result;
     }
     const legacy =
-      mode === "legacy"
+      mode === "legacy" && !request.platform
         ? config.musicSources
             .filter((s) => s.enabled)
             .map(
@@ -177,12 +183,21 @@ export class MusicServices {
                 ),
             )
         : [];
-    return searchMusic(request, [
-      ...legacy,
-      ...new LxMusicService(this.store, this.fetchImpl).assistantSources(
-        signal,
-      ),
-    ]);
+    const online = new LxMusicService(
+      this.store,
+      this.fetchImpl,
+    ).assistantSources(signal);
+    return searchMusic(
+      request,
+      [
+        ...legacy,
+        ...online.filter(
+          (source) =>
+            !request.platform || source.id === "lx-" + request.platform,
+        ),
+      ],
+      retainLxCandidates,
+    );
   }
   async playlist(name: string, signal?: AbortSignal) {
     signal?.throwIfAborted();
@@ -366,6 +381,15 @@ export class MusicServices {
         this.store.snapshot().config.musicServices.mode,
       ].join("\n"),
     );
+  }
+  async resolveFirstPlayable(tracks: MusicTrack[], signal?: AbortSignal) {
+    this.assertOnline();
+    const winner = await new LxMusicService(
+      this.store,
+      this.fetchImpl,
+    ).resolveFirstPlayable(tracks, signal);
+    this.assertTrack(tracks[winner.index]);
+    return winner;
   }
   async resolvePlayback(track: MusicTrack, signal?: AbortSignal) {
     signal?.throwIfAborted();

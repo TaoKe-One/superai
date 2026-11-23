@@ -1,15 +1,16 @@
 import { libraryRef } from "../library/config.ts";
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { JsonStore, StoredTrack } from "../../storage/store.ts";
 import { validLxTrack } from "../../storage/store.ts";
-import type { MusicTrack, MusicSource } from "../types.ts";
+import type { MusicTrack, MusicSource, PlaybackResolution } from "../types.ts";
 import {
   LxCatalog,
   lxPlatform,
   PLATFORMS,
   type LxPlatform,
 } from "./catalog.ts";
-import { runLxScript } from "./runtime.ts";
+import { LxRuntimeBusyError, runLxScript } from "./runtime.ts";
 import { publicRequest, publicUrl } from "./http.ts";
 import { probeAudio } from "./probe.ts";
 import { rankSources, healthSample, LxResolutionError } from "./health.ts";
@@ -21,6 +22,48 @@ import {
   playlistScore,
   playlistPopularity,
 } from "../playlist-query.ts";
+
+const PLAYBACK_TIMEOUT_MS = 25000;
+const SOURCE_TIMEOUT_MS = 12000;
+const VOICE_PROBE_CONCURRENCY = 3;
+type LxSource = ReturnType<
+  JsonStore["snapshot"]
+>["config"]["lxSources"][number];
+type SongSourceCandidate = {
+  track: MusicTrack;
+  index: number;
+  source: LxSource;
+  rank: number;
+};
+
+function platformSources(sources: LxSource[], platform: string) {
+  return rankSources(
+    sources.filter(
+      (source) =>
+        source.enabled &&
+        source.sources[platform]?.actions.includes("musicUrl"),
+    ),
+    platform,
+  );
+}
+
+export async function downloadLxScript(url: string, request = publicRequest) {
+  publicUrl(url);
+  const signal = AbortSignal.timeout(12000);
+  let response = await request(url, {}, signal);
+  if (
+    [502, 503, 504].includes(response.statusCode) &&
+    !response.headers["retry-after"]
+  ) {
+    await delay(500, undefined, { signal });
+    response = await request(url, {}, signal);
+  }
+  if (response.statusCode !== 200)
+    throw new Error(
+      "下载音源脚本失败（上游 HTTP " + response.statusCode + "）",
+    );
+  return response.raw.toString("utf8");
+}
 
 export class LxMusicService {
   readonly catalog: LxCatalog;
@@ -53,10 +96,7 @@ export class LxMusicService {
     return this.sources().find((source) => source.id === id);
   }
   async importUrl(url: string) {
-    publicUrl(url);
-    const response = await publicRequest(url);
-    if (response.statusCode !== 200) throw new Error("下载音源脚本失败");
-    return this.importScript(response.raw.toString("utf8"));
+    return this.importScript(await downloadLxScript(url));
   }
   async changeSource(id: string, enabled?: boolean) {
     await this.store.update((state) => {
@@ -112,6 +152,124 @@ export class LxMusicService {
   async resolvePlayback(track: MusicTrack, signal?: AbortSignal) {
     return this.resolve(track, true, signal);
   }
+  async resolveFirstPlayable(tracks: MusicTrack[], outerSignal?: AbortSignal) {
+    outerSignal?.throwIfAborted();
+    const config = this.store.snapshot().config;
+    const candidates = tracks.flatMap((track, index) =>
+      track.lx
+        ? platformSources(config.lxSources, track.lx.platform).map(
+            (source, rank) => ({ track, index, source, rank }),
+          )
+        : [],
+    );
+    if (!candidates.length)
+      throw new LxResolutionError(
+        [],
+        "请在音乐源管理中导入支持该平台的 LX 自定义音源",
+      );
+
+    const primary = candidates.filter(
+      ({ track }) => track.lx?.platform !== "mg",
+    );
+    const migu = candidates.filter(({ track }) => track.lx?.platform === "mg");
+    const failures: ResolutionAttempt[] = [];
+    if (primary.length && migu.length) {
+      try {
+        return await this.raceSongSources(
+          primary,
+          failures,
+          PLAYBACK_TIMEOUT_MS,
+          outerSignal,
+        );
+      } catch (error) {
+        outerSignal?.throwIfAborted();
+        if (!(error instanceof LxResolutionError)) throw error;
+      }
+      // Reserve time for the fallback even if the primary sources time out.
+      return this.raceSongSources(
+        migu,
+        failures,
+        SOURCE_TIMEOUT_MS,
+        outerSignal,
+      );
+    }
+    return this.raceSongSources(
+      candidates,
+      failures,
+      PLAYBACK_TIMEOUT_MS,
+      outerSignal,
+    );
+  }
+
+  private async raceSongSources(
+    candidates: SongSourceCandidate[],
+    failures: ResolutionAttempt[],
+    timeoutMs: number,
+    outerSignal?: AbortSignal,
+  ) {
+    // Give each eligible platform a slot before trying additional scripts.
+    const pending = candidates.sort((a, b) => a.rank - b.rank).values();
+    const platformCount = new Set(
+      candidates.map(({ track }) => track.lx?.platform),
+    ).size;
+    const concurrency = Math.max(VOICE_PROBE_CONCURRENCY, platformCount);
+    const controller = new AbortController();
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const deadline = Date.now() + timeoutMs;
+    const signal = AbortSignal.any([
+      controller.signal,
+      timeout,
+      ...(outerSignal ? [outerSignal] : []),
+    ]);
+    const probe = async () => {
+      for (const { track, index, source } of pending) {
+        signal.throwIfAborted();
+        const attempts: ResolutionAttempt[] = [];
+        try {
+          const resolution = await this.trySource(
+            source,
+            track,
+            true,
+            Math.min(deadline, Date.now() + SOURCE_TIMEOUT_MS),
+            attempts,
+            signal,
+            false,
+            true,
+          );
+          signal.throwIfAborted();
+          return { index, resolution };
+        } catch (error) {
+          failures.push(...attempts);
+          signal.throwIfAborted();
+          if (!(error instanceof LxResolutionError)) throw error;
+        }
+      }
+      throw new LxResolutionError(failures);
+    };
+
+    try {
+      const winner = await Promise.any(
+        Array.from({ length: Math.min(concurrency, candidates.length) }, probe),
+      );
+      outerSignal?.throwIfAborted();
+      const resolution: PlaybackResolution = {
+        ...winner.resolution,
+        attempts: [...failures, ...winner.resolution.attempts],
+      };
+      return { index: winner.index, resolution };
+    } catch (error) {
+      outerSignal?.throwIfAborted();
+      if (!(error instanceof AggregateError)) throw error;
+      const unexpected = timeout.aborted
+        ? undefined
+        : error.errors.find(
+            (failure) => !(failure instanceof LxResolutionError),
+          );
+      throw unexpected ?? new LxResolutionError([...failures]);
+    } finally {
+      controller.abort();
+    }
+  }
   async checkPlatform(id: string, track: MusicTrack, signal: AbortSignal) {
     const source = this.store
       .snapshot()
@@ -136,8 +294,10 @@ export class LxMusicService {
     elapsedMs: number,
     reason: SourceHealth["reason"],
     quality: string,
+    signal?: AbortSignal,
   ) {
     await this.store.update((state) => {
+      signal?.throwIfAborted();
       const source = state.config.lxSources.find((s) => s.id === id);
       if (source)
         (source.health ??= {})[platform] = healthSample(
@@ -161,15 +321,13 @@ export class LxMusicService {
     }
     const { platform } = track.lx;
     const config = this.store.snapshot().config;
-    const sources = rankSources(
-      config.lxSources.filter(
-        (s) => s.enabled && s.sources[platform]?.actions.includes("musicUrl"),
-      ),
-      platform,
-    );
+    const sources = platformSources(config.lxSources, platform);
     if (!sources.length)
-      throw new Error("请在音乐源管理中导入支持该平台的 LX 自定义音源");
-    const deadline = Date.now() + 25000;
+      throw new LxResolutionError(
+        [],
+        "请在音乐源管理中导入支持该平台的 LX 自定义音源",
+      );
+    const deadline = Date.now() + PLAYBACK_TIMEOUT_MS;
     const attempts: ResolutionAttempt[] = [];
     for (const source of sources) {
       signal?.throwIfAborted();
@@ -184,7 +342,7 @@ export class LxMusicService {
           source,
           track,
           verifyAudio,
-          Math.min(deadline, Date.now() + 12000),
+          Math.min(deadline, Date.now() + SOURCE_TIMEOUT_MS),
           attempts,
           signal,
         );
@@ -196,13 +354,14 @@ export class LxMusicService {
     throw new LxResolutionError(attempts);
   }
   private async trySource(
-    source: ReturnType<JsonStore["snapshot"]>["config"]["lxSources"][number],
+    source: LxSource,
     track: MusicTrack,
     verifyAudio: boolean,
     deadline: number,
     attempts: ResolutionAttempt[],
     signal?: AbortSignal,
     checkingDisabledSource = false,
+    waitForRuntime = false,
   ) {
     const { platform, songInfo } = track.lx!;
     const config = this.store.snapshot().config;
@@ -246,13 +405,14 @@ export class LxMusicService {
           this.fetchImpl,
           Math.max(100, Math.min(10000, remaining - (verifyAudio ? 1000 : 0))),
           signal,
+          waitForRuntime,
         );
         const url = validPlaybackUrl(result);
         publicUrl(url);
         if (verifyAudio) {
           stage = "audio";
           const probeSignal = AbortSignal.timeout(
-            Math.max(1, Math.min(5000, deadline - Date.now())),
+            Math.max(1, Math.min(5000, Math.floor(deadline - Date.now()))),
           );
           await probeAudio(
             url,
@@ -279,6 +439,7 @@ export class LxMusicService {
             Date.now() - sourceStarted,
             "ok",
             quality,
+            signal,
           );
         attempts.push({
           sourceId: source.id,
@@ -298,7 +459,9 @@ export class LxMusicService {
           attempts: [...attempts],
         };
       } catch (error) {
-        if (signal?.aborted) throw new Error("音源检测已取消");
+        signal?.throwIfAborted();
+        if (error instanceof LxRuntimeBusyError)
+          throw new LxResolutionError([...attempts]);
         lastReason =
           Date.now() >= deadline ||
           /超时|timeout/i.test(String((error as Error)?.message))
@@ -323,6 +486,7 @@ export class LxMusicService {
         Date.now() - sourceStarted,
         lastReason,
         lastQuality,
+        signal,
       );
     throw new LxResolutionError([...attempts]);
   }

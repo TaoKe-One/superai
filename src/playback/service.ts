@@ -1,6 +1,7 @@
 import type { MiotClient, PlaybackStatus } from "../miot/client.ts";
 import type { MusicTrack, PlaybackResolution } from "../music/types.ts";
-import type { JsonStore, PlaybackMode, StoredTrack } from "../storage/store.ts";
+import type { JsonStore, StoredTrack } from "../storage/store.ts";
+import { isPlaybackMode, type PlaybackMode } from "./mode.ts";
 import {
   checkExecution,
   estimatedSpeechMs,
@@ -12,6 +13,10 @@ import { createHash } from "node:crypto";
 
 const queueLocks = new WeakMap<JsonStore, Map<string, Promise<void>>>();
 const POLL_INTERVAL_MS = 3000;
+type ResolveFirstPlayable = (
+  tracks: MusicTrack[],
+  signal?: AbortSignal,
+) => Promise<{ index: number; resolution: PlaybackResolution }>;
 type SpeechPause = {
   deviceId: string;
   track: TrackIdentity;
@@ -29,6 +34,7 @@ export class PlaybackService {
     signal?: AbortSignal,
   ) => Promise<string | PlaybackResolution>;
   private readonly scopeDeviceId?: string;
+  private readonly resolveFirstPlayable?: ResolveFirstPlayable;
   private playbackResolution:
     | { id: string; sourceId: string; info: Omit<PlaybackResolution, "url"> }
     | undefined;
@@ -58,10 +64,12 @@ export class PlaybackService {
       signal?: AbortSignal,
     ) => Promise<string | PlaybackResolution>,
     scopeDeviceId?: string,
+    resolveFirstPlayable?: ResolveFirstPlayable,
   ) {
     this.store = store;
     this.scopeDeviceId = scopeDeviceId;
     this.miot = miot;
+    this.resolveFirstPlayable = resolveFirstPlayable;
     this.resolveTrack =
       resolveTrack ??
       (async (track) => {
@@ -493,6 +501,7 @@ export class PlaybackService {
     tracks: MusicTrack[],
     index = 0,
     context?: ExecutionContext,
+    alternates?: MusicTrack[],
   ) {
     checkExecution(context);
     this.invalidateCheck();
@@ -503,6 +512,7 @@ export class PlaybackService {
         this.prepareQueue(tracks),
         undefined,
         context,
+        alternates && this.prepareQueue(alternates),
       ),
     );
   }
@@ -600,9 +610,8 @@ export class PlaybackService {
     });
   }
 
-  async setMode(mode: PlaybackMode) {
-    if (!["order", "loop", "single", "random"].includes(mode))
-      throw new Error("不支持的播放模式");
+  async setMode(mode: unknown) {
+    if (!isPlaybackMode(mode)) throw new Error("不支持的播放模式");
     await this.updateStore((state) => {
       state.config.playbackMode = mode;
     });
@@ -683,20 +692,36 @@ export class PlaybackService {
     replacement?: StoredTrack[],
     isCurrent?: () => boolean,
     context?: ExecutionContext,
+    alternates?: StoredTrack[],
   ) {
     const tracks = replacement ?? this.config().playbackQueue.tracks;
     if (!Number.isInteger(index) || index < 0 || index >= tracks.length)
       throw new Error("队列中没有这首歌曲");
-    const track = tracks[index];
     checkExecution(context);
-    context?.onStage?.("resolving");
-    const resolved = await this.resolveTrack(
-      {
-        ...track,
-        playUrl: track.playUrl ? this.store.decrypt(track.playUrl) : undefined,
-      },
-      context?.signal,
-    );
+    let track = tracks[index];
+    let resolved: string | PlaybackResolution;
+    if (track.lx && alternates && this.resolveFirstPlayable) {
+      context?.onStage?.("probing_song_sources");
+      const candidates = [track, ...alternates];
+      const winner = await this.resolveFirstPlayable(
+        candidates,
+        context?.signal,
+      );
+      track = candidates[winner.index];
+      resolved = winner.resolution;
+      tracks[index] = track;
+    } else {
+      context?.onStage?.("resolving");
+      resolved = await this.resolveTrack(
+        {
+          ...track,
+          playUrl: track.playUrl
+            ? this.store.decrypt(track.playUrl)
+            : undefined,
+        },
+        context?.signal,
+      );
+    }
     if (isCurrent && !isCurrent()) return;
     checkExecution(context);
     if (this.session && !isCurrent)
@@ -858,11 +883,23 @@ function playbackEnded(
     previous.position <= 0 ||
     !Number.isFinite(duration) ||
     duration <= 0 ||
-    elapsed <= 0 ||
-    elapsed > 15
+    elapsed <= 0
   )
     return false;
   const remaining = duration - previous.position;
+
+  // Sparse status polls can miss the last seconds. A rewound position near
+  // the time predicted for a full play is evidence of a firmware repeat.
+  if (elapsed > 15) {
+    const timeAcrossEnd = remaining + sample.position;
+    return (
+      sample.status === 1 &&
+      sample.hasPosition &&
+      sample.position < previous.position - 1 &&
+      remaining > 0 &&
+      Math.abs(timeAcrossEnd - elapsed) <= 2
+    );
+  }
   const reachedEnd =
     remaining <= elapsed + 1 && previous.position >= Math.max(0, duration - 16);
   // Detect firmware repeating the single pushed item as well as a normal stopped-at-end report.
