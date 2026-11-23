@@ -23,7 +23,10 @@ export function newerVersion(candidate: string, current: string): boolean {
   return false;
 }
 
-export async function latestVersion(fetchImpl = fetch): Promise<string> {
+export async function latestRelease(fetchImpl = fetch): Promise<{
+  version: string;
+  assets: unknown[];
+}> {
   const response = await fetchImpl(RELEASES_URL, {
     headers: { accept: "application/vnd.github+json" },
     redirect: "error",
@@ -39,7 +42,14 @@ export async function latestVersion(fetchImpl = fetch): Promise<string> {
   if (!stableVersion(version) || release.prerelease || release.draft) {
     throw new Error("GitHub 未返回有效的正式版本。");
   }
-  return version;
+  return {
+    version,
+    assets: Array.isArray(release.assets) ? release.assets : [],
+  };
+}
+
+export async function latestVersion(fetchImpl = fetch): Promise<string> {
+  return (await latestRelease(fetchImpl)).version;
 }
 
 export async function localRequest(

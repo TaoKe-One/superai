@@ -40,4 +40,8 @@ The Docker image includes FFmpeg. In a command-line deployment, run `ffmpeg -ver
 
 Use the password recovery command inside a v0.1.1 or newer container if you forgot the password. If setup reappears after recreation, check that `/data` mounts the original volume. Compose uses its project name to name the volume. After moving directories, reuse the project name or specify the existing volume. Preserve `state.json` and the original key configuration during a migration. [Password recovery](deployment.en.md#forgotten-administrator-password) · [Persistence and backups](deployment.en.md#persistence-and-backups)
 
+## Where is the Upgrade Now button?
+
+Select **Check for Updates**. **Upgrade Now** appears when a newer stable release is available. If System Update reports that the updater is disabled, check that you have a version that includes the built-in updater, use the default image command or `npm start`, and review `SUPERAI_UPDATES`. Existing installations with a separate updater container can keep using `SUPERAI_UPDATES=true`. [One-click upgrades](deployment.en.md#one-click-upgrades-in-settings)
+
 When reporting a problem, include the deployment method, version, reproduction steps, and redacted logs. Include the speaker model and firmware for device issues. [Report an issue on GitHub](https://github.com/TaoKe-One/superai/issues)

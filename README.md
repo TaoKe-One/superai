@@ -32,7 +32,7 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.2
+  taokeone/superai:0.1.3
 ```
 
 配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ docker run -d --name superai --restart unless-stopped \
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.2
+docker pull ghcr.io/taoke-one/superai:0.1.3
 ```
 
 ### 方式二：Docker Compose
@@ -52,7 +52,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.2
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.2
+    image: taokeone/superai:0.1.3
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,11 +69,11 @@ volumes:
 docker compose up -d
 ```
 
-也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.2`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
+也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.3`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
 
 ### 方式三：命令行
 
-从 GitHub Releases 下载所需版本的 **Source code**，或克隆仓库，然后在项目根目录执行下面的命令。安装 Node.js 22.6+（建议使用受支持的 Node.js LTS 版本）和 npm。使用需要转码的 WebDAV 音频时，还需要安装 FFmpeg 并将其加入 `PATH`。[正式版本](https://github.com/TaoKe-One/superai/releases)
+从 GitHub Releases 下载所需版本的 **Source code**，或克隆仓库，然后在项目根目录执行下面的命令。安装 Node.js 22.6+（建议使用受支持的 Node.js LTS 版本）、npm 和 `unzip`（用于后台升级）。使用需要转码的 WebDAV 音频时，还需要安装 FFmpeg 并将其加入 `PATH`。[正式版本](https://github.com/TaoKe-One/superai/releases)
 
 ```bash
 cp .env.example .env
@@ -81,7 +81,7 @@ npm ci --omit=dev
 npm start
 ```
 
-默认写入项目下的 `data/`。首次部署或更换机器时，可在 `.env` 中通过 `DATA_DIR` 指定持久化目录。更新后重新安装依赖并重启进程。
+默认写入项目下的 `data/`。首次部署或更换机器时，可在 `.env` 中通过 `DATA_DIR` 指定持久化目录。后台安装的版本保存在数据目录中，重启后会继续使用。
 
 需要局域网访问、反向代理或签名音频地址转跳时，见[部署配置](docs/deployment.md)。
 
@@ -89,9 +89,7 @@ GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。
 
 ### 后台一键升级
 
-在「**平台设置 → 系统更新**」检查 GitHub 正式版本。用 `docker run` 部署时，首次需要换到支持一键升级的镜像，并启动独立的升级容器。此后点「立即升级」即可下载新镜像并切换，保留原端口映射和数据卷。切换时平台会短暂重启，需要重新登录。新容器健康检查失败时会自动恢复旧容器和原配置。[启用步骤](docs/deployment.md#后台一键升级)
-
-一键升级自 v0.1.2 起提供。v0.1.1 及更早版本先手动升级一次。Docker Compose 和 Node.js 命令行部署按各自的方式更新。[部署与更新说明](docs/deployment.md)
+包含内置升级的版本通过 `docker run`、Docker Compose 或 `npm start` 正常启动后，升级服务会一起运行。登录后打开「**平台设置 → 系统更新**」，点击「检查更新」。发现新版后，点击「立即升级」。平台会验证正式部署包，保留原数据目录，短暂重启并验证新版。新版启动失败时会恢复原程序和数据。[更新与迁移说明](docs/deployment.md#后台一键升级)
 
 ## 第一次使用
 

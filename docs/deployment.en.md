@@ -9,7 +9,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.2
+  taokeone/superai:0.1.3
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.2
+docker pull ghcr.io/taoke-one/superai:0.1.3
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.2
+    image: taokeone/superai:0.1.3
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,14 +49,14 @@ docker compose up -d
 To use the Compose file included in the repository, run this in the project root. Existing installations should keep the same Compose project and data volume.
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.2 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.3 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
 
 ## Node.js command line
 
-Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
+Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. Install `unzip` for in-app updates. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
 
 ```bash
 cp .env.example .env
@@ -64,37 +64,19 @@ npm ci --omit=dev
 npm start
 ```
 
-Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. After updating the source, reinstall dependencies and restart the process.
+Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. In-app releases are stored in the data directory and remain active after a restart.
 
 GitHub-generated source archives include `test/` for development and CI. If you have a separately distributed `*-deploy.zip`, extract it and follow the same steps. Deployment ZIPs and Docker images exclude test files.
 
 ## One-click upgrades in Settings
 
-Open **Settings → System Update** to check for stable GitHub releases. With a `docker run` deployment, an optional updater container enables the upgrade button. Start with an official image that includes the updater. The updater downloads the image for your architecture before switching containers and reuses the original ports and data volume. Expect a short restart and sign in again afterward. If the new container fails its health check, the updater restores the previous container and configuration.
+Deploy an image or source version that includes the built-in updater. The updater starts automatically with `docker run`, `docker compose up -d`, or `npm start`. For the initial migration from v0.1.2 or earlier, install the new image or source and reuse the original data volume or `DATA_DIR`. If migrating an installation configured with `SUPERAI_UPDATES=true` and a separate updater container, remove that setting and stop the old updater. Existing installations can also keep using the separate updater.
 
-One-click upgrades are available starting with v0.1.2. First update v0.1.1 and earlier using their deployment instructions.
+1. Sign in, open **Settings → System Update**, and check for updates.
+2. Select **Upgrade Now** when an update is available. SuperAI downloads the deployment ZIP from GitHub Releases, verifies its SHA-256 digest, and installs the runtime dependencies.
+3. SuperAI backs up state and restarts briefly. If the new version fails to start, it restores the previous program and state. Sign in again after the switch.
 
-Set `SUPERAI_IMAGE` to an official versioned image that includes the updater. When recreating an existing container to enable this feature, reuse its ports, data volume, environment variables, and network settings. This example uses Docker Hub, a fixed port, and the default container name.
-
-```bash
-docker volume create superai-updates
-
-docker run -d --name superai --restart unless-stopped \
-  -p 127.0.0.1:8787:8787 -v superai-data:/data \
-  --label io.superai.updates=true -e SUPERAI_UPDATES=true \
-  -v superai-updates:/run/superai-updates:ro \
-  "$SUPERAI_IMAGE"
-
-docker run -d --name superai-updater --restart unless-stopped --user 0 --no-healthcheck \
-  -e SUPERAI_UPDATE_REPOSITORY=docker.io/taokeone/superai \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v superai-updates:/run/superai-updates \
-  "$SUPERAI_IMAGE" node --experimental-strip-types src/update/worker.ts
-```
-
-For a GHCR deployment, set `SUPERAI_UPDATE_REPOSITORY` to `ghcr.io/taoke-one/superai`. To use a different app container name, set `SUPERAI_UPDATE_CONTAINER` in the updater. The updater requires Docker management access and is the only container that mounts the Docker socket. It exposes no network ports. One-click upgrades require fixed host ports and a writable named volume mounted at `/data`.
-
-Docker Compose deployments upgrade through the Compose procedure above. For Node.js deployments, update the source and restart the process. Both deployment types can check release availability in Settings.
+Docker stores the new app under the mounted `/data` volume. Node.js stores it under `DATA_DIR`. System Update shows the active app version. Pull a new Docker image to upgrade the base image, Node.js, or FFmpeg. The deployment host needs access to GitHub Releases and the npm registry. Node.js installations require `unzip`. Set `SUPERAI_UPDATES=false` and restart to disable in-app installation.
 
 ## Bind address and port
 
@@ -114,7 +96,7 @@ An existing container deployed with `-p 127.0.0.1:8787:8787` accepts connections
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.2
+  taokeone/superai:0.1.3
 ```
 
 For the repository Compose file, set `PUBLISH_HOST` to `0.0.0.0` or the host's LAN IP in the existing project's `.env`, then run `docker compose up -d`. With the standalone Compose example in the README, edit `ports` directly. For Node.js, set `HOST` and restart the process.

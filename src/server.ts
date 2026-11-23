@@ -202,7 +202,9 @@ export async function createAppServer(options: AppServerOptions = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const updateSocket =
     options.updateSocket ??
-    (process.env.SUPERAI_UPDATES === "true" ? UPDATE_SOCKET : "");
+    (process.env.SUPERAI_UPDATES === "true"
+      ? UPDATE_SOCKET
+      : (process.env.SUPERAI_MANAGED_UPDATE_SOCKET ?? ""));
   const miot = new MiotClient(store, fetchImpl, options.playbackUrl);
   const playback = playbackFor(store, miot, fetchImpl);
   const lx = new LxMusicService(store, fetchImpl);
@@ -2103,13 +2105,15 @@ if (isMain) {
     process.stdout.write(
       "superai listening on http://" + host + ":" + port + "\n",
     );
+    process.send?.({ ready: true, version: appVersion });
   });
+  const close = () =>
+    server.close(async () => {
+      await relay?.close();
+      process.exit(0);
+    });
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () =>
-      server.close(async () => {
-        await relay?.close();
-        process.exit(0);
-      }),
-    );
+    process.once(signal, close);
   }
+  if (process.send) process.once("disconnect", close);
 }

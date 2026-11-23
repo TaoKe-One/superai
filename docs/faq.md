@@ -40,4 +40,8 @@ Docker 镜像自带 FFmpeg。命令行部署可执行 `ffmpeg -version` 检查�
 
 忘记密码时，在 v0.1.1 或更新版本的容器中使用密码恢复命令。如果重建容器后出现初始化页，先检查 `/data` 挂载的是否是原数据卷。Compose 会根据项目名生成卷名，移动目录时须沿用旧项目名或明确指定已有卷。迁移时同时保留 `state.json` 与原密钥配置。[密码恢复](deployment.md#忘记管理员密码) · [持久化和备份](deployment.md#持久化和备份)
 
+## 系统更新页为什么没有安装按钮
+
+点击「检查更新」。有更新的正式版本时才会显示「立即升级」。如果页面提示升级服务未启用，请确认已换到包含内置升级的版本，使用镜像的默认启动命令或 `npm start`，并检查 `SUPERAI_UPDATES` 设置。旧版的独立升级容器部署仍可使用 `SUPERAI_UPDATES=true`。[后台一键升级](deployment.md#后台一键升级)
+
 提交问题时附上部署方式、版本、复现步骤及脱敏日志。涉及音箱请附型号和固件版本。[在 GitHub 提交问题](https://github.com/TaoKe-One/superai/issues)

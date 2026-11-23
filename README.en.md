@@ -32,7 +32,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.2
+  taokeone/superai:0.1.3
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.2
+docker pull ghcr.io/taoke-one/superai:0.1.3
 ```
 
 ### Option 2 — Docker Compose
@@ -52,7 +52,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.2
+    image: taokeone/superai:0.1.3
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,11 +69,11 @@ Run this in the same directory.
 docker compose up -d
 ```
 
-You can also set `image` to `ghcr.io/taoke-one/superai:0.1.2`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
+You can also set `image` to `ghcr.io/taoke-one/superai:0.1.3`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
 
 ### Option 3 — Command line
 
-Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
+Download **Source code** for your chosen version from GitHub Releases, or clone the repository. Run the commands below in the project root. Install Node.js 22.6+ (a supported Node.js LTS version is recommended) and npm. Install `unzip` for in-app updates. For WebDAV audio that requires transcoding, install FFmpeg and add it to `PATH`. [Stable releases](https://github.com/TaoKe-One/superai/releases)
 
 ```bash
 cp .env.example .env
@@ -81,7 +81,7 @@ npm ci --omit=dev
 npm start
 ```
 
-Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. After updating the source, reinstall dependencies and restart the process.
+Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. In-app releases are stored in the data directory and remain active after a restart.
 
 For LAN access, reverse proxies, or signed audio URL redirects, see the [deployment guide](docs/deployment.en.md).
 
@@ -89,9 +89,7 @@ GitHub-generated source archives include `test/` for development and CI. If you 
 
 ### One-click upgrades in Settings
 
-Open **Settings → System Update** to check for stable GitHub releases. With `docker run`, first deploy an image that supports one-click upgrades and start the separate updater container. Then **Upgrade Now** downloads and switches the image while keeping the port mappings and data volume. The app restarts briefly, and you need to sign in again. If the new container fails its health check, the updater restores the previous container and configuration. [Setup steps](docs/deployment.en.md#one-click-upgrades-in-settings)
-
-One-click upgrades are available starting with v0.1.2. Upgrade v0.1.1 and earlier manually first. Docker Compose and Node.js deployments follow their own update steps. [Deployment and updates](docs/deployment.en.md)
+Versions with the built-in updater start it alongside the app through `docker run`, Docker Compose, or `npm start`. Sign in and open **Settings → System Update**. Check for updates, then select **Upgrade Now** when a release is available. SuperAI verifies the deployment package, keeps the data directory, and restarts briefly to check the new version. It restores the previous program and data if startup fails. [Updates and migration](docs/deployment.en.md#one-click-upgrades-in-settings)
 
 ## First run
 

@@ -8,7 +8,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg unzip
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY src ./src
 COPY public ./public
@@ -22,4 +22,4 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8787/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-CMD ["node", "--experimental-strip-types", "src/server.ts"]
+CMD ["node", "--experimental-strip-types", "src/update/launcher.ts"]
