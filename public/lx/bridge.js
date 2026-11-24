@@ -42,6 +42,7 @@
   }
   const report = (error) => {
     const message = error instanceof Error ? error.message : String(error);
+    globalThis.SuperAILog?.error(message);
     const details = Array.isArray(error?.attempts)
       ? error.attempts
           .map(
@@ -75,7 +76,10 @@
     const response = await fetch(path, {
       method,
       credentials: "same-origin",
-      headers: body === undefined ? {} : { "content-type": "application/json" },
+      headers: {
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...globalThis.SuperAILog?.headers(),
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: signal ?? AbortSignal.timeout(35000),
     });
@@ -898,6 +902,7 @@
       try {
         await action();
       } catch (error) {
+        globalThis.SuperAILog?.error(error.message);
         $("#sp-lx-dialog-error").textContent = error.message;
       } finally {
         el.disabled = false;

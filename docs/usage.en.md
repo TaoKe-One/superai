@@ -54,10 +54,20 @@ SuperAI reads Xiaomi cloud conversation records, identifies intent, and handles 
 
 [![The web AI Assistant showing a user question and the AI's reply](previews/assistant.png)](previews/assistant.png)
 
+### Local weather and speaker status
+
+Enter a city or district under **Speaker Devices → Speaker Location**. Web questions use the selected speaker's location. Voice questions use the location of the speaker that received the request. Both fall back to the default location. Ask “What's the weather like today?” or name a place explicitly, as in “Will it rain in Beijing tomorrow?”
+
+Ask “Where is this speaker?” to hear its configured location. For questions about volume or what's playing, SuperAI reads the current status from the speaker. Update the location after moving the device.
+
 ## Passwords and updates
 
 Starting with v0.1.2, **Settings → Change Administrator Password** verifies the current password and accepts a new password of at least five characters. Changing the password signs out all administrator sessions. On versions with the built-in updater, Docker, Docker Compose, and command-line deployments can check and install stable releases under **Settings → System Update**. Sign in again after updating. [Password recovery](deployment.en.md#forgotten-administrator-password) · [One-click upgrades](deployment.en.md#one-click-upgrades-in-settings)
 
 ## Download runtime logs
 
-Administrators can select **Download Logs** under **Settings → Runtime Logs** to export `superai-runtime.log`. The log keeps the most recent 500 info, warning, and error entries for app startup and shutdown, API requests, private library audio transfers, and voice task outcomes. Entries use UTC timestamps and persist in `runtime.log` in the data directory. The export contains diagnostic event and status information.
+Administrators can download `superai-runtime.log` under **Settings → Runtime Logs**. The latest 500 records persist in `runtime.log` in the data directory. Each entry includes a UTC timestamp, level, and event type.
+
+- The platform and player record clicks, double-clicks, changes, and form submissions with the page and control. Related API requests can share the same action ID and include their status, duration, and error details.
+- Speaker and web assistant logs include the user’s words, resolved intent, execution stages, reply, and outcome. Playback logs include the track, queue position, mode, and source checks. Speaker utterances come from Xiaomi’s cloud transcripts.
+- The log redacts recognized credentials and URL paths. Review conversation text for personal information before sharing an export.

@@ -981,6 +981,33 @@
                 </div>
                 <div id="queueList" aria-label="播放队列"></div>
               </section>
+              <section class="section">
+                <h2>音箱所在地区</h2>
+                <p class="footnote">
+                  用于查询当地天气、空气质量等信息。填写城市或区县即可。
+                </p>
+                <form id="speakerLocationForm">
+                  <label for="defaultSpeakerLocation">默认地区</label>
+                  <input
+                    id="defaultSpeakerLocation"
+                    maxlength="80"
+                    placeholder="例如：杭州市西湖区"
+                  />
+                  <div id="speakerLocationOverride" class="hidden">
+                    <label id="speakerLocationLabel" for="speakerLocation"
+                      >当前音箱地区</label
+                    >
+                    <input
+                      id="speakerLocation"
+                      maxlength="80"
+                      placeholder="留空则使用默认地区"
+                    />
+                  </div>
+                  <button class="btn" id="saveSpeakerLocation" type="submit">
+                    保存地区
+                  </button>
+                </form>
+              </section>
               <div class="notice">
                 小米云端接口可以下发播放和播报，但不能可靠阻止音箱先播放原生回答。完全接管语音仍取决于音箱固件或前置音频接入。
               </div>
@@ -1069,7 +1096,8 @@
             >
               <h2 id="runtimeLogsHeading">运行日志</h2>
               <p class="footnote">
-                自动保留最近 500 条运行记录，包含正常、警告和错误。
+                保留最近 500
+                条操作与诊断记录，包含点击、报错、语音转写和助手处理结果。
               </p>
               <button class="btn" id="downloadRuntimeLogs" type="button">
                 下载日志
@@ -1229,6 +1257,7 @@
       </div>
     </div>
     <div class="toast hidden" id="toast" role="status"></div>
+    <script src="/interaction-log.js"></script>
     <script type="module">
       import { createQrLogin } from "/qr-login.js";
       import { createVoicePanel } from "/voice.js";
@@ -1245,6 +1274,7 @@
           ...options,
           headers: {
             "content-type": "application/json",
+            ...globalThis.SuperAILog.headers(),
             ...(options.headers || {}),
           },
         });
@@ -1259,6 +1289,7 @@
         return payload;
       };
       const toast = (message, error = false) => {
+        if (error) globalThis.SuperAILog.error(message);
         const node = $("#toast");
         node.textContent = message;
         node.classList.toggle("error", error);
@@ -1269,6 +1300,7 @@
       const settings = createSettings({ api, toast });
       const voicePanel = createVoicePanel({ api, toast });
       const showAuth = (needsSetup) => {
+        globalThis.SuperAILog.enable(false);
         qrLogin.cancel();
         voicePanel.reset();
         $("#systemUpdate").open = false;
@@ -1290,6 +1322,7 @@
       };
       const loadStatus = async () => {
         status = await api("/api/status");
+        globalThis.SuperAILog.enable(true);
         $("#authView").classList.add("hidden");
         $("#appView").classList.remove("hidden");
         const playerFrame = $("#lxPlayer");
@@ -1331,6 +1364,15 @@
         document
           .querySelectorAll("#chooseDevice")
           .forEach((button) => (button.disabled = !status.selectedDeviceId));
+        const current = status.devices.find(
+          (device) => device.deviceId === status.selectedDeviceId,
+        );
+        $("#defaultSpeakerLocation").value = status.defaultLocation ?? "";
+        $("#speakerLocationOverride").classList.toggle("hidden", !current);
+        $("#speakerLocationLabel").textContent = current
+          ? current.name + "的地区"
+          : "当前音箱地区";
+        $("#speakerLocation").value = current?.location ?? "";
         renderQueue();
       };
       const renderSettings = () => {
@@ -1896,6 +1938,7 @@
             chatHistory = chatHistory.slice(-12);
           }
         } catch (error) {
+          globalThis.SuperAILog.error(error.message);
           reply.textContent = error.message;
           reply.classList.add("error");
         } finally {
@@ -2029,11 +2072,43 @@
           toast(error.message, true);
         }
       });
+      $("#speakerLocationForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = $("#saveSpeakerLocation");
+        const deviceId = status.selectedDeviceId;
+        button.disabled = true;
+        try {
+          const result = await api("/api/miot/location", {
+            method: "PUT",
+            body: JSON.stringify({
+              defaultLocation: $("#defaultSpeakerLocation").value,
+              ...(deviceId
+                ? { deviceId, location: $("#speakerLocation").value }
+                : {}),
+            }),
+          });
+          status.defaultLocation = result.defaultLocation;
+          const device = status.devices.find(
+            (item) => item.deviceId === deviceId,
+          );
+          if (device) device.location = result.location;
+          renderDevices();
+          toast("地区已保存");
+        } catch (error) {
+          toast(error.message, true);
+        } finally {
+          button.disabled = false;
+        }
+      });
       $("#addSource").addEventListener("click", () => addSourceRow());
       $("#downloadRuntimeLogs").addEventListener("click", async (event) => {
         const button = event.currentTarget;
         button.disabled = true;
         try {
+          await Promise.all([
+            globalThis.SuperAILog.flush(),
+            $("#lxPlayer").contentWindow?.SuperAILog?.flush(),
+          ]);
           const response = await fetch("/api/system/logs");
           if (!response.ok)
             throw new Error("下载日志失败，请检查登录状态后重试。");
@@ -2057,7 +2132,7 @@
       let updateJobId = "";
       let updateTimer;
       const updateMessages = {
-        pulling: "正在下载更新。准备就绪后，平台会短暂重启。",
+        pulling: "正在下载镜像。下载完成后，平台会短暂重启。",
         switching: "正在备份配置并切换版本…",
         verifying: "正在验证新版是否正常运行…",
         rolling_back: "正在恢复原版本…",

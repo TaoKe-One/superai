@@ -28,6 +28,7 @@ export class VoiceConversationMonitor {
   ) => Promise<void>;
   private readonly intervalMs: number;
   private readonly waitingForReply: (deviceId: string) => boolean;
+  private readonly onPollError?: (device: MonitorTarget, error: string) => void;
   private readonly targets = new Map<string, DeviceMonitor>();
   private activePolls = 0;
   private accountId = "";
@@ -42,12 +43,14 @@ export class VoiceConversationMonitor {
     ) => Promise<void>,
     intervalMs = 2000,
     waitingForReply: (deviceId: string) => boolean = () => false,
+    onPollError?: VoiceConversationMonitor["onPollError"],
   ) {
     this.store = store;
     this.miot = miot;
     this.onUtterance = onUtterance;
     this.intervalMs = Math.max(250, intervalMs);
     this.waitingForReply = waitingForReply;
+    this.onPollError = onPollError;
   }
 
   get isActive() {
@@ -202,9 +205,13 @@ export class VoiceConversationMonitor {
         target.processed.add(messageKey(message.timestamp, message.text));
       }
     } catch (error) {
-      target.lastError = (
+      if (!this.current(target)) return;
+      const message = (
         error instanceof Error ? error.message : "对话读取失败"
       ).slice(0, 160);
+      if (target.lastError !== message)
+        this.onPollError?.(target.device, message);
+      target.lastError = message;
       target.retryDelay = Math.min(
         30_000,
         Math.max(

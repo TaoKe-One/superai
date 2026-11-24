@@ -3,6 +3,18 @@ import type { PlaybackMode } from "../playback/mode.ts";
 
 export type ControlCommand = "pause" | "resume" | "next" | "previous" | "stop";
 export type ExecutableControlCommand = ControlCommand | "volume";
+export type DeviceStatusField = "location" | "volume" | "playback" | "overview";
+
+export function isDeviceStatusField(
+  value: unknown,
+): value is DeviceStatusField {
+  return (
+    value === "location" ||
+    value === "volume" ||
+    value === "playback" ||
+    value === "overview"
+  );
+}
 
 export interface ConversationTurn {
   role: "user" | "assistant";
@@ -60,9 +72,16 @@ export type AssistantIntent =
       question: string;
       answer?: string;
       needsSearch?: boolean;
+      locationMode?: "local" | "explicit";
       modelError?: "format" | "request";
       confidence: number;
       source: "llm" | "fallback";
+    }
+  | {
+      action: "device_status";
+      field: DeviceStatusField;
+      confidence: number;
+      source: "llm";
     }
   | {
       action: "clarify";
@@ -84,6 +103,8 @@ export interface ModelIntent {
   question?: string;
   answer?: string;
   needsSearch?: boolean;
+  locationMode?: "local" | "explicit";
+  field?: DeviceStatusField;
   confidence?: number;
   reason?: string;
 }

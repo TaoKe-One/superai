@@ -1,5 +1,6 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { redactLogText } from "./log-details.ts";
 
 const LIMIT = 500;
 type Level = "INFO" | "WARN" | "ERROR";
@@ -11,8 +12,13 @@ export class RuntimeLog {
   private dirty = false;
   private writeFailed = false;
   private readonly file: string;
+  private readonly secrets: () => string[];
 
-  constructor(dataDir = process.env.DATA_DIR ?? "./data") {
+  constructor(
+    dataDir = process.env.DATA_DIR ?? "./data",
+    secrets = () => [] as string[],
+  ) {
+    this.secrets = secrets;
     this.file = join(dataDir, "runtime.log");
   }
 
@@ -24,6 +30,14 @@ export class RuntimeLog {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT")
         console.warn("SuperAI could not read the existing runtime log.");
     }
+  }
+
+  detail(level: Level, event: string, fields: Record<string, unknown>) {
+    const secrets = this.secrets();
+    const serialized = JSON.stringify(fields, (_key, value) =>
+      typeof value === "string" ? redactLogText(value, secrets) : value,
+    ).replace(/[\u2028\u2029]/gu, " ");
+    this.record(level, event, serialized);
   }
 
   // Callers provide fixed event names and selected metadata only.

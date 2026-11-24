@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 import { createAppServer } from "../src/server.ts";
 import { RuntimeLog } from "../src/storage/runtime-log.ts";
 
@@ -66,6 +67,42 @@ test("log export requires a session and includes activity without request data",
     ).status,
     503,
   );
+  const actionId = "fixture-click-1";
+  const post = (endpoint, body, headers = {}) =>
+    fetch(base + endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const events = [
+    {
+      page: "platform",
+      type: "click",
+      actionId,
+      target: "button 发送",
+      value: "private-field",
+    },
+    { page: "player", type: "dblclick", target: "tr 示例歌曲" },
+    {
+      page: "player",
+      type: "error",
+      message:
+        "上游失败 https://music.example/private?token=hidden-url-token API key: hidden-api-value",
+    },
+  ];
+  assert.equal((await post(path + "/ui", { events })).status, 401);
+  assert.equal((await post(path + "/ui", { events }, { cookie })).status, 204);
+  const command = await post(
+    "/api/assistant/command",
+    { text: "随机播放", history: [] },
+    {
+      cookie,
+      "x-superai-ui-action": actionId,
+    },
+  );
+  assert.equal(command.status, 200);
+  assert.equal((await command.json()).playbackMode, "random");
+
   const exported = await fetch(base + path, { headers: { cookie } });
   assert.equal(exported.status, 200);
   assert.match(
@@ -86,6 +123,85 @@ test("log export requires a session and includes activity without request data",
     text,
     /ERROR http\.request method=POST route=\/api\/system\/update status=503/,
   );
-  for (const value of [password, cookie, "private-token", "private-key"])
+  assert.match(text, /ERROR http\.error .*升级服务暂时不可用/);
+  assert.match(text, /INFO ui\.click .*fixture-click-1.*button 发送/);
+  assert.match(text, /INFO ui\.dblclick .*示例歌曲/);
+  assert.match(text, /ERROR ui\.error .*上游失败/);
+  assert.match(
+    text,
+    /INFO assistant\.turn .*fixture-click-1.*随机播放.*set_playback_mode.*已切换为随机播放/,
+  );
+  assert.match(text, /INFO playback\.mode_changed {"mode":"random"}/);
+  for (const value of [
+    password,
+    cookie,
+    "private-token",
+    "private-key",
+    "hidden-url-token",
+    "hidden-api-value",
+    "private-field",
+  ])
     assert.ok(!text.includes(value));
+});
+
+test("the browser logs real actions and errors without capturing input or file values", async () => {
+  const listeners = new Map();
+  const requests = [];
+  class Control {
+    tagName = "INPUT";
+    id = "password";
+    value = "private-password";
+    files = [{ name: "private-file" }];
+    closest() {
+      return this;
+    }
+    matches(selector) {
+      return selector === "input,textarea";
+    }
+    getAttribute() {
+      return null;
+    }
+  }
+  const context = {
+    location: { pathname: "/lx/" },
+    Element: Control,
+    document: {
+      addEventListener: (name, listener) => listeners.set(name, listener),
+      querySelector: () => ({ value: "online" }),
+    },
+    window: {
+      addEventListener: (name, listener) => listeners.set(name, listener),
+    },
+    fetch: async (path, options) => {
+      requests.push({ path, ...options });
+    },
+    setTimeout,
+    clearTimeout,
+    AbortSignal,
+  };
+  vm.runInNewContext(
+    await readFile(
+      new URL("../public/interaction-log.js", import.meta.url),
+      "utf8",
+    ),
+    context,
+  );
+  const target = new Control();
+  listeners.get("click")({ type: "click", target, isTrusted: false });
+  listeners.get("click")({ type: "click", target, isTrusted: true });
+  const id = context.SuperAILog.headers()["x-superai-ui-action"];
+  listeners.get("change")({ type: "change", target, isTrusted: true });
+  listeners.get("unhandledrejection")({ reason: Error("音频加载失败") });
+  await context.SuperAILog.flush();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].path, "/api/system/logs/ui");
+  const { events } = JSON.parse(requests[0].body);
+  assert.deepEqual(
+    events.map(({ type }) => type),
+    ["click", "error"],
+  );
+  assert.equal(events[0].actionId, id);
+  assert.equal(events[0].target, "input #password");
+  assert.equal(events[1].message, "音频加载失败");
+  assert.doesNotMatch(requests[0].body, /private-password|private-file/);
 });

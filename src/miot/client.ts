@@ -367,6 +367,16 @@ export class MiotClient {
       ) {
         throw new Error("小米账号已变更，请重新读取设备");
       }
+      const locations = new Map(
+        state.config.devices.map((device) => [
+          device.deviceId,
+          device.location,
+        ]),
+      );
+      for (const device of devices) {
+        const location = locations.get(device.deviceId);
+        if (location) device.location = location;
+      }
       state.config.devices = devices;
       if (
         !devices.some(

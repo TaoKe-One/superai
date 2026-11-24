@@ -744,6 +744,30 @@ test("voice TTS asks for details, then a short reply uses the originating speake
   assert.equal(requests.at(-1).previousPrompt, true);
   assert.deepEqual(sent.at(-1), ["a", answer]);
   assert.equal(completed.followUps.length, 0);
+  const log = await (
+    await fetch(base + "/api/system/logs", { headers: { cookie } })
+  ).text();
+  const turns = log
+    .split("\n")
+    .filter((line) => line.includes(" voice.turn "))
+    .map((line) =>
+      JSON.parse(
+        line.slice(line.indexOf(" voice.turn ") + " voice.turn ".length),
+      ),
+    );
+  assert.ok(
+    turns.some(
+      ({ text, tasks }) =>
+        text === first && tasks[0].intent.action === "clarify",
+    ),
+  );
+  const finished = turns.find(
+    ({ deviceName, text }) => deviceName === "a" && text === reply,
+  );
+  assert.equal(finished.tasks[0].intent.question, "介绍月球");
+  assert.equal(finished.status, "accepted");
+  assert.equal(finished.message, answer);
+  assert.ok(finished.stages.some(({ name }) => name === "reply_received"));
 });
 
 test("follow-up context expires and an unconfirmed TTS never opens a reply window", async (t) => {

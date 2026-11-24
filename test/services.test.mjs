@@ -742,7 +742,7 @@ test("real-time answer does not fall back to an unverified model answer when sea
     s.config.webSearch = { mode: "auto", apiKey: store.encrypt("search-key") };
   });
   const result = await executeAssistant(
-    "今天天气如何",
+    "杭州市今天天气如何",
     store,
     { execute: async () => ({}) },
     async (input) => {
@@ -920,7 +920,7 @@ test("built-in MiniMax lists models, tests a draft, and answers with the saved c
     });
     const prompt = messages.at(-1).content;
     if (prompt.includes("搜索材料：")) return completion("据资料，今天有雨。");
-    if (prompt === "今天天气如何")
+    if (prompt === "杭州市今天天气如何")
       return completion(
         JSON.stringify({ action: "answer", needsSearch: true }),
       );
@@ -982,7 +982,7 @@ test("built-in MiniMax lists models, tests a draft, and answers with the saved c
   assert.equal(saved.keySet, true);
   assert.equal(JSON.stringify(saved).includes(ai.apiKey), false);
   const answer = await api.call("/api/assistant/command", "POST", {
-    text: "今天天气如何",
+    text: "杭州市今天天气如何",
   });
   assert.equal(answer.body.intent.source, "llm");
   assert.equal(answer.body.message, "据资料，今天有雨。");

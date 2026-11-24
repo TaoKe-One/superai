@@ -38,7 +38,7 @@ import {
   withExecutionSignal,
   type ExecutionContext,
 } from "./assistant/execution.ts";
-import type { AssistantIntent } from "./assistant/types.ts";
+import type { AssistantIntent, DeviceStatusField } from "./assistant/types.ts";
 import { VoiceConversationMonitor } from "./assistant/voice-monitor.ts";
 import { LxMusicService, fromLxSong } from "./music/lx/service.ts";
 import { handleLxApi } from "./music/lx/api.ts";
@@ -63,6 +63,7 @@ import { MiotClient } from "./miot/client.ts";
 import { startAdminControl } from "./security/admin-control.ts";
 import { AdminAuth } from "./security/auth.ts";
 import { RuntimeLog } from "./storage/runtime-log.ts";
+import { assistantLogResult, logError } from "./storage/log-details.ts";
 import {
   appVersion,
   latestVersion,
@@ -81,6 +82,9 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // A control character may expand to six bytes in a JSON string.
 const MAX_LX_IMPORT_BODY_BYTES = MAX_LX_SCRIPT_BYTES * 6 + 1024;
 const LOG_DOWNLOAD_PATH = "/api/system/logs";
+const UI_LOG_PATH = "/api/system/logs/ui";
+const responseErrors = new WeakMap<ServerResponse, Record<string, unknown>>();
+const playbackLogs = new WeakMap<JsonStore, RuntimeLog>();
 const LOGGED_API_GROUPS = new Set([
   "ai",
   "assistant",
@@ -101,10 +105,25 @@ const LOGGED_API_ROUTES = new Set([
   "/api/ai/test",
   "/api/assistant/command",
   "/api/miot/devices/refresh",
+  "/api/miot/location",
   "/api/miot/control",
   "/api/music/play",
   "/api/music/search",
   "/api/playback/state",
+  "/api/playback/mode",
+  "/api/lx/catalog",
+  "/api/lx/player/play",
+  "/api/lx/player/browser",
+  "/api/lx/player/queue",
+  "/api/lx/player/detach",
+  "/api/lx/sources/import",
+  "/api/lx/sources/import-url",
+  "/api/lx/sources/check",
+  "/api/music/queue/play",
+  "/api/music/queue/add",
+  "/api/music/queue/clear",
+  "/api/music/playlist/play",
+  "/api/music/library/play",
   "/api/settings/admin-password",
   "/api/system/update",
   LOG_DOWNLOAD_PATH,
@@ -148,6 +167,7 @@ const playbackFor = (
               tracks,
               signal,
             ),
+          playbackLogs.get(store),
         );
         services.set(id, service);
         if (entry!.monitoring) service.startMonitoring();
@@ -192,6 +212,7 @@ const playbackFor = (
           tracks,
           signal,
         ),
+      playbackLogs.get(store),
     );
     entry.services.set(deviceId, service);
     if (entry.monitoring) service.startMonitoring();
@@ -204,6 +225,11 @@ function sendJson(
   status: number,
   body: unknown,
 ): void {
+  if (status >= 400 && body && typeof body === "object" && "error" in body) {
+    const { error, attempts } = body as { error: unknown; attempts?: unknown };
+    if (typeof error === "string")
+      responseErrors.set(response, { message: error, attempts });
+  }
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
@@ -248,8 +274,9 @@ export interface AppServerOptions {
 export async function createAppServer(options: AppServerOptions = {}) {
   const store = new JsonStore(options.dataDir);
   await store.init();
-  const logs = new RuntimeLog(options.dataDir);
+  const logs = new RuntimeLog(options.dataDir, () => store.logSecrets());
   await logs.init();
+  playbackLogs.set(store, logs);
   const auth = new AdminAuth(store);
   const fetchImpl = options.fetchImpl ?? fetch;
   const updateSocket =
@@ -266,6 +293,9 @@ export async function createAppServer(options: AppServerOptions = {}) {
     new URL("../public/superai-icon.png", import.meta.url),
   );
   const qrScript = await readFile(QR_SCRIPT_FILE);
+  const interactionScript = await readFile(
+    new URL("../public/interaction-log.js", import.meta.url),
+  );
   const voiceScript = await readFile(
     new URL("../public/voice.js", import.meta.url),
   );
@@ -309,16 +339,49 @@ export async function createAppServer(options: AppServerOptions = {}) {
         voicePlayback = { id: randomUUID(), deviceId: context.deviceId };
       return result;
     }),
-    (status) =>
-      logs.record(
+    (event, detail) => {
+      const {
+        id,
+        deviceName,
+        text,
+        timestamp,
+        status,
+        tasks,
+        stages,
+        message,
+      } = event;
+      if (detail?.wake) {
+        logs.detail(
+          detail.wake === "reply_wake_accepted" ? "INFO" : "WARN",
+          "voice.follow_up",
+          {
+            id,
+            deviceName,
+            ...detail,
+          },
+        );
+        return;
+      }
+      logs.detail(
         status === "failed"
           ? "ERROR"
-          : status === "unconfirmed" || status === "no_match"
+          : ["unconfirmed", "no_match"].includes(status)
             ? "WARN"
             : "INFO",
-        "voice.result",
-        "status=" + status,
-      ),
+        "voice.turn",
+        {
+          id,
+          deviceName,
+          text,
+          timestamp,
+          status,
+          tasks,
+          stages,
+          message,
+          ...detail,
+        },
+      );
+    },
     (deviceId, signal) => miot.wakeForReply(deviceId, signal),
   );
   const voiceMonitor = new VoiceConversationMonitor(
@@ -330,6 +393,11 @@ export async function createAppServer(options: AppServerOptions = {}) {
     },
     options.voiceIntervalMs,
     (deviceId) => voiceCoordinator.isWaitingForReply(deviceId),
+    (device, error) =>
+      logs.detail("WARN", "voice.monitor_error", {
+        device: device.name,
+        error,
+      }),
   );
   let voiceAccountId = store.snapshot().config.xiaomi?.userId ?? "";
   const syncVoice = () => {
@@ -357,7 +425,16 @@ export async function createAppServer(options: AppServerOptions = {}) {
       return;
     }
     const path = url.pathname;
-    if (path.startsWith("/api/") || path.startsWith("/media/private/")) {
+    const requestId = randomUUID();
+    const uiAction = request.headers["x-superai-ui-action"];
+    const actionId =
+      typeof uiAction === "string" && /^[a-z0-9-]{1,80}$/u.test(uiAction)
+        ? uiAction
+        : undefined;
+    if (
+      path !== UI_LOG_PATH &&
+      (path.startsWith("/api/") || path.startsWith("/media/private/"))
+    ) {
       const group = path.split("/", 3)[2];
       const route = LOGGED_API_ROUTES.has(path)
         ? path
@@ -374,6 +451,15 @@ export async function createAppServer(options: AppServerOptions = {}) {
       const fields = "method=" + method + " route=" + route;
       response.once?.("finish", () => {
         const status = response.statusCode;
+        const backgroundRead =
+          method === "GET" &&
+          [
+            "/api/playback/state",
+            "/api/voice/diagnostics",
+            "/api/lx/sources/check-status",
+            "/api/lx/sources",
+          ].includes(path);
+        if (status < 400 && backgroundRead && !actionId) return;
         logs.record(
           status >= 500 ? "ERROR" : status >= 400 ? "WARN" : "INFO",
           "http.request",
@@ -381,12 +467,29 @@ export async function createAppServer(options: AppServerOptions = {}) {
             " status=" +
             status +
             " elapsed_ms=" +
-            Math.round(performance.now() - start),
+            Math.round(performance.now() - start) +
+            " request_id=" +
+            requestId +
+            (actionId ? " action_id=" + actionId : ""),
         );
+        const error = responseErrors.get(response);
+        if (error)
+          logs.detail(status >= 500 ? "ERROR" : "WARN", "http.error", {
+            requestId,
+            actionId,
+            method,
+            route,
+            status,
+            ...error,
+          });
       });
       response.once?.("close", () => {
         if (!response.writableFinished)
-          logs.record("WARN", "http.interrupted", fields);
+          logs.record(
+            "WARN",
+            "http.interrupted",
+            fields + " request_id=" + requestId,
+          );
       });
     }
     if (request.method === "GET" && url.pathname === "/healthz") {
@@ -433,6 +536,15 @@ export async function createAppServer(options: AppServerOptions = {}) {
           "default-src 'self'; img-src 'self' data: https: http:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; media-src 'self' https: http:; frame-ancestors 'self'; base-uri 'none'",
       });
       response.end(asset.content);
+      return;
+    }
+    if (request.method === "GET" && path === "/interaction-log.js") {
+      response.writeHead(200, {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      });
+      response.end(interactionScript);
       return;
     }
     if (request.method === "GET" && url.pathname === "/voice.js") {
@@ -501,6 +613,38 @@ export async function createAppServer(options: AppServerOptions = {}) {
       }
       if (!auth.isAuthenticated(request)) {
         sendJson(response, 401, { error: "authentication_required" });
+        return;
+      }
+      if (path === UI_LOG_PATH && request.method === "POST") {
+        const { events } = objectValue(await readJson(request, 32768));
+        if (!Array.isArray(events) || events.length > 25)
+          throw new Error("界面日志批次无效");
+        for (const raw of events) {
+          const entry = objectValue(raw);
+          if (
+            (entry.page !== "platform" && entry.page !== "player") ||
+            !["click", "dblclick", "change", "submit", "error"].includes(
+              stringValue(entry.type),
+            )
+          )
+            continue;
+          const { at } = entry;
+          logs.detail(
+            entry.type === "error" ? "ERROR" : "INFO",
+            "ui." + entry.type,
+            {
+              page: entry.page,
+              view: stringValue(entry.view).slice(0, 120),
+              actionId: stringValue(entry.actionId).slice(0, 80),
+              target: stringValue(entry.target).slice(0, 240),
+              message: stringValue(entry.message).slice(0, 600),
+              clientTime:
+                typeof at === "number" && Number.isFinite(at) ? at : undefined,
+            },
+          );
+        }
+        response.writeHead(204);
+        response.end();
         return;
       }
       if (url.pathname === LOG_DOWNLOAD_PATH && request.method === "GET") {
@@ -748,6 +892,7 @@ export async function createAppServer(options: AppServerOptions = {}) {
           xiaomiConnected: Boolean(state.xiaomi),
           devices: state.devices,
           selectedDeviceId: state.selectedDeviceId,
+          defaultLocation: state.defaultLocation,
           playbackQueue: publicQueue(store),
           playbackMode: state.playbackMode,
           favoritesCount: state.favorites.length,
@@ -931,30 +1076,42 @@ export async function createAppServer(options: AppServerOptions = {}) {
         request.method === "POST"
       ) {
         const body = objectValue(await readJson(request));
-        const result = await executeAssistant(
-          validText(body.text),
-          store,
-          miot,
-          fetchImpl,
-          normalizeHistory(body.history),
-        );
-        if (result.modelError === "request" || result.modelError === "format") {
-          logs.record(
-            "ERROR",
-            "assistant.model_failed",
-            "reason=" + result.modelError,
+        const text = validText(body.text);
+        const trace: AssistantRunTrace = { tasks: [] };
+        try {
+          const result = await executeAssistant(
+            text,
+            store,
+            miot,
+            fetchImpl,
+            normalizeHistory(body.history),
+            trace,
           );
-        } else if (
-          result.executionStatus === "failed" ||
-          result.executionStatus === "no_match"
-        ) {
-          logs.record(
-            "WARN",
-            "assistant.execution",
-            "status=" + result.executionStatus,
+          const unsuccessful = trace.tasks.some(
+            ({ result }) =>
+              result &&
+              (result.modelError ||
+                result.speechError ||
+                result.searchError ||
+                ["failed", "no_match"].includes(String(result.status))),
           );
+          logs.detail(unsuccessful ? "WARN" : "INFO", "assistant.turn", {
+            requestId,
+            actionId,
+            text,
+            ...trace,
+          });
+          sendJson(response, 200, result);
+        } catch (error) {
+          logs.detail("ERROR", "assistant.turn", {
+            requestId,
+            actionId,
+            text,
+            ...trace,
+            error: logError(error),
+          });
+          throw error;
         }
-        sendJson(response, 200, result);
         return;
       }
       if (url.pathname === "/api/music/search" && request.method === "POST") {
@@ -1036,7 +1193,10 @@ export async function createAppServer(options: AppServerOptions = {}) {
           try {
             deviceStatus = await miot.getPlaybackStatus(device.deviceId);
           } catch (error) {
-            logs.record("WARN", "playback.device_status_failed");
+            logs.detail("WARN", "playback.device_status_failed", {
+              device: device.name,
+              error: logError(error),
+            });
             deviceStatus = {
               status: -1,
               error: safeMessage(error).slice(0, 160),
@@ -1239,6 +1399,38 @@ export async function createAppServer(options: AppServerOptions = {}) {
         });
         return;
       }
+      if (url.pathname === "/api/miot/location" && request.method === "PUT") {
+        const body = objectValue(await readJson(request));
+        validateOptionalStrings(body, [
+          "deviceId",
+          "location",
+          "defaultLocation",
+        ]);
+        const deviceId = stringValue(body.deviceId);
+        const defaultLocation = stringValue(body.defaultLocation).trim();
+        const location = stringValue(body.location).trim();
+        if (
+          typeof body.defaultLocation !== "string" ||
+          [location, defaultLocation].some(
+            (value) => value.length > 80 || /\p{Cc}/u.test(value),
+          ) ||
+          (deviceId && typeof body.location !== "string")
+        )
+          throw new Error("请填写有效的城市或区县，最多 80 个字符");
+        await store.update(({ config }) => {
+          if (deviceId) {
+            const device = config.devices.find(
+              (item) => item.deviceId === deviceId,
+            );
+            if (!device) throw new Error("找不到所选音箱");
+            if (location) device.location = location;
+            else delete device.location;
+          }
+          config.defaultLocation = defaultLocation;
+        });
+        sendJson(response, 200, { defaultLocation, location });
+        return;
+      }
       if (url.pathname === "/api/miot/control" && request.method === "POST") {
         const body = objectValue(await readJson(request));
         const command = stringValue(body.command);
@@ -1403,12 +1595,23 @@ function createUnderstandingAgent(
   );
 }
 
+type AssistantRunTrace = {
+  tasks: Array<{
+    text: string;
+    intent: AssistantIntent;
+    owner: string;
+    stages: string[];
+    result?: ReturnType<typeof assistantLogResult>;
+  }>;
+};
+
 export async function executeAssistant(
   text: string,
   store: JsonStore,
   miot: MiotClient,
   fetchImpl: typeof fetch = fetch,
   history: Array<{ role: "user" | "assistant"; content: string }> = [],
+  trace?: AssistantRunTrace,
 ): Promise<Record<string, unknown>> {
   const deviceId = store.snapshot().config.selectedDeviceId;
   if (deviceId && miot instanceof MiotClient) void miot.warmSpeech(deviceId);
@@ -1424,7 +1627,20 @@ export async function executeAssistant(
   );
   const results: Record<string, unknown>[] = [];
   for (const task of plan.tasks) {
-    const result = await executor.run(task.intent, task.text, context);
+    const stages: string[] = [];
+    const entry: AssistantRunTrace["tasks"][number] = { ...task, stages };
+    trace?.tasks.push(entry);
+    const result = await executor.run(
+      task.intent,
+      task.text,
+      trace
+        ? {
+            ...context,
+            onStage: (stage) => stages.push(stage),
+          }
+        : context,
+    );
+    if (trace) entry.result = assistantLogResult(result);
     results.push({ ...result, intent: task.intent, owner: task.owner });
   }
   if (results.length === 1) return results[0];
@@ -1484,13 +1700,59 @@ export async function executeAssistantIntent(
       ...(speechError ? { speechError } : {}),
     };
   }
+  const device = state.devices.find(
+    (item) => item.deviceId === state.selectedDeviceId,
+  );
+  const location = device?.location || state.defaultLocation;
+  if (intent.action === "device_status") {
+    const message = await readSpeakerStatus(
+      miot,
+      device?.deviceId,
+      intent.field,
+      location,
+    );
+    checkExecution(context);
+    const speechError = await speakIfAvailable(
+      playback,
+      state.selectedDeviceId,
+      state.devices,
+      message,
+      context,
+    );
+    return { intent, message, ...(speechError ? { speechError } : {}) };
+  }
   if (intent.action === "answer") {
     let answer = intent.answer;
     const sources: Array<{ title: string; url: string }> = [];
     let searchError: string | undefined;
-    const question = intent.question || text;
+    let question = intent.question || text;
+    const localQuestion =
+      intent.locationMode === "local" ||
+      (!intent.locationMode && isUnqualifiedWeatherQuestion(text));
     const needsSearch =
-      needsWebSearch(text, intent) || needsWebSearch(question, intent);
+      localQuestion ||
+      needsWebSearch(text, intent) ||
+      needsWebSearch(question, intent);
+    if (localQuestion) {
+      if (!location) {
+        const result = await executeAssistantIntent(
+          {
+            action: "clarify",
+            question: "你想查哪个城市或区县？",
+            confidence: 1,
+            source: "rules",
+          },
+          text,
+          store,
+          miot,
+          musicTransport,
+          context,
+        );
+        return { ...result, executionStatus: "needs_input" };
+      }
+      const request = isUnqualifiedWeatherQuestion(text) ? text : question;
+      question = location + " " + request;
+    }
     if (needsSearch) {
       context.onStage?.("searching");
       const mode = state.webSearch.mode ?? "auto";
@@ -1512,6 +1774,7 @@ export async function executeAssistantIntent(
             question,
             store.decrypt(state.webSearch.apiKey),
             fetchImpl,
+            localQuestion ? location : undefined,
           );
           if (!research.context || !research.sources.length)
             throw new Error("搜索未返回可核实的资料");
@@ -1520,6 +1783,7 @@ export async function executeAssistantIntent(
             question,
             research.context,
             fetchImpl,
+            localQuestion ? location : undefined,
           );
           sources.push(...research.sources);
         } else if (!sources.length)
@@ -1529,7 +1793,9 @@ export async function executeAssistantIntent(
           );
       } catch (error) {
         searchError = safeMessage(error);
-        answer = "这次没有取得可核实的联网资料，无法确认相关实时信息。";
+        answer = localQuestion
+          ? `这次没有查到${location}的可靠资料，暂时无法确认。`
+          : "这次没有取得可核实的联网资料，无法确认相关实时信息。";
       }
     }
     let modelError: "format" | "request" | undefined;
@@ -1558,6 +1824,7 @@ export async function executeAssistantIntent(
       message: answer,
       sources,
       searchUsed: sources.length > 0,
+      ...(localQuestion ? { location } : {}),
       ...(modelError ? { modelError, executionStatus: "failed" } : {}),
       ...(searchError ? { searchError } : {}),
       ...(speechError ? { speechError } : {}),
@@ -2006,10 +2273,60 @@ async function speakIfAvailable(
   }
 }
 
+function isUnqualifiedWeatherQuestion(text: string): boolean {
+  return /^(?:小爱同学[，,\s]*)?(?:(?:帮我|请)?(?:查一下|查查|查询|告诉我)[，,\s]*)?(?:今天|明天|后天|昨天|现在|当前|此刻|这几天)?(?:的)?(?:天气预报|天气|气温|温度|空气质量)(?:怎样|如何|怎么样|多少|是多少|好吗|是怎样的)?[吧呢吗？?。！!\s]*$/u.test(
+    text.trim(),
+  );
+}
+
+async function readSpeakerStatus(
+  miot: MiotClient,
+  deviceId: string | undefined,
+  field: DeviceStatusField,
+  location: string,
+): Promise<string> {
+  const locationMessage = location
+    ? `当前使用的地区是${location}。`
+    : "当前音箱还没有配置所在地区。";
+  if (field === "location") return locationMessage;
+  if (!deviceId) return "请先连接并选择一台音箱。";
+  try {
+    const status = await miot.getPlaybackStatus(deviceId);
+    const volume =
+      status.volume === undefined
+        ? ""
+        : `音量是百分之${Math.round(status.volume)}。`;
+    const track = status.title
+      ? `${status.artist ? status.artist + "的" : ""}《${status.title}》`
+      : "";
+    const playback =
+      status.status === 1
+        ? `正在播放${track || "音频"}。`
+        : status.status === 2
+          ? `播放已暂停${track ? "，当前曲目是" + track : ""}。`
+          : status.status === 0 || status.status === 3
+            ? "当前没有在播放。"
+            : "";
+    if (field === "volume") return volume || "音箱没有返回当前音量。";
+    if (field === "playback") return playback || "音箱没有返回当前播放状态。";
+    return (
+      (volume || playback
+        ? "已读取到音箱状态。"
+        : "音箱已响应，暂未返回音量或播放状态。") +
+      locationMessage +
+      playback +
+      volume
+    );
+  } catch {
+    return "暂时无法读取音箱的实时状态。";
+  }
+}
+
 async function searchWeb(
   query: string,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
+  location?: string,
 ): Promise<{
   context: string;
   sources: Array<{ title: string; url: string }>;
@@ -2022,7 +2339,7 @@ async function searchWeb(
       query,
       search_depth: "basic",
       max_results: 5,
-      include_answer: true,
+      include_answer: !location,
     }),
     signal: AbortSignal.timeout(12_000),
   });
@@ -2031,7 +2348,19 @@ async function searchWeb(
     answer?: unknown;
     results?: unknown;
   };
-  const items = Array.isArray(payload.results) ? payload.results : [];
+  const locationTerms = location
+    ?.split(/[省市区县，,\s]+/u)
+    .filter((term) => term.length > 1);
+  const items = (Array.isArray(payload.results) ? payload.results : []).filter(
+    (item) => {
+      if (!isRecord(item)) return false;
+      const excerpt = stringValue(item.title) + " " + stringValue(item.content);
+      return (
+        !locationTerms?.length ||
+        locationTerms.every((term) => excerpt.includes(term))
+      );
+    },
+  );
   const sources = items.flatMap(
     (raw): Array<{ title: string; url: string }> => {
       if (!raw || typeof raw !== "object") return [];
@@ -2042,7 +2371,7 @@ async function searchWeb(
     },
   );
   const context = [
-    stringValue(payload.answer),
+    location ? "" : stringValue(payload.answer),
     ...items.map((item) => {
       if (!item || typeof item !== "object") return "";
       const result = item as Record<string, unknown>;
@@ -2066,6 +2395,7 @@ async function writeSourcedAnswer(
   question: string,
   context: string,
   fetchImpl: typeof fetch = fetch,
+  location?: string,
 ): Promise<string> {
   const answer = await requestModelText(
     { ...ai, timeoutMs: 15_000 },
@@ -2077,7 +2407,14 @@ async function writeSourcedAnswer(
       },
       {
         role: "user",
-        content: "问题：" + question + "\n\n搜索材料：\n" + context,
+        content:
+          (location
+            ? "目标地区：" + location + "。只采用能确认属于该地区的实时资料。\n"
+            : "") +
+          "问题：" +
+          question +
+          "\n\n搜索材料：\n" +
+          context,
       },
     ],
     fetchImpl,

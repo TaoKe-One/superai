@@ -50,6 +50,7 @@ export interface MiotDevice {
   model: string;
   hardware: string;
   presence: string;
+  location?: string;
 }
 
 export interface StoredState {
@@ -83,6 +84,7 @@ export interface StoredState {
     playbackHistory: Array<{ track: StoredTrack; playedAt: number }>;
     voiceMonitorEnabled: boolean;
     selectedDeviceId: string;
+    defaultLocation: string;
     devices: MiotDevice[];
     xiaomi: null | {
       userId: string;
@@ -114,6 +116,7 @@ const freshState = (): StoredState => ({
     playbackHistory: [],
     voiceMonitorEnabled: false,
     selectedDeviceId: "",
+    defaultLocation: "",
     devices: [],
     xiaomi: null,
   },
@@ -183,6 +186,32 @@ export class JsonStore {
 
   snapshot(): StoredState {
     return structuredClone(this.state);
+  }
+
+  logSecrets() {
+    const { config } = this.state;
+    const encrypted = [
+      config.ai.apiKey,
+      config.webSearch.apiKey,
+      config.xiaomi?.serviceToken,
+      config.xiaomi?.passToken,
+      config.xiaomi?.cUserId,
+      ...config.musicSources.map((source) => source.apiKey),
+      ...config.musicServices.libraries.flatMap((library) => [
+        library.password,
+        library.accessCode,
+      ]),
+    ];
+    const secrets: string[] = [];
+    for (const cipher of encrypted) {
+      if (!cipher) continue;
+      try {
+        secrets.push(this.decrypt(cipher));
+      } catch {
+        // A malformed setting must not prevent logging the operation.
+      }
+    }
+    return secrets.sort((a, b) => b.length - a.length);
   }
 
   sign(value: string): string {
@@ -424,6 +453,9 @@ function normalizeState(value: unknown): StoredState {
       model: device.model,
       hardware: device.hardware,
       presence: device.presence,
+      ...(typeof device.location === "string" && device.location.trim()
+        ? { location: device.location.trim().slice(0, 80) }
+        : {}),
     };
   });
   const xiaomi =
@@ -465,6 +497,7 @@ function normalizeState(value: unknown): StoredState {
     version: 1,
     admin,
     config: {
+      defaultLocation: string(config.defaultLocation).trim().slice(0, 80),
       ai: {
         baseUrl: stringField(ai, "baseUrl"),
         model: stringField(ai, "model"),

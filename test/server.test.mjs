@@ -7,10 +7,145 @@ import { createServer } from "node:http";
 import {
   createAppServer,
   executeAssistant,
+  executeAssistantIntent,
   handleAssistantRoute,
 } from "../src/server.ts";
 import { IntentRouter } from "../src/assistant/router.ts";
 import { JsonStore } from "../src/storage/store.ts";
+
+test("local questions use the originating speaker and reject search results from another city", async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), "superai-location-"));
+  t.after(() => rm(dataDir, { recursive: true, force: true }));
+  const store = new JsonStore(dataDir);
+  await store.init();
+  await store.update(({ config }) => {
+    config.ai = {
+      baseUrl: "https://model.example/v1",
+      model: "test",
+      apiKey: store.encrypt("fixture"),
+    };
+    config.webSearch.apiKey = store.encrypt("fixture");
+    config.devices = [
+      {
+        deviceId: "a",
+        name: "客厅",
+        model: "",
+        hardware: "",
+        presence: "online",
+        location: "北京市",
+      },
+      {
+        deviceId: "b",
+        name: "书房",
+        model: "",
+        hardware: "",
+        presence: "online",
+        location: "杭州市西湖区",
+      },
+      {
+        deviceId: "c",
+        name: "卧室",
+        model: "",
+        hardware: "",
+        presence: "online",
+      },
+    ];
+    config.selectedDeviceId = "a";
+  });
+  const spoken = [];
+  const reads = [];
+  const miot = {
+    execute: async (deviceId, command, args) =>
+      spoken.push({ deviceId, command, text: args.text }),
+    getPlaybackStatus: async (deviceId) => {
+      reads.push(deviceId);
+      return { status: 2, volume: 37, title: "晴天" };
+    },
+  };
+  let includeLocalSource = true;
+  const fetchImpl = async (input, init) => {
+    const body = JSON.parse(init.body);
+    if (new URL(input).hostname === "api.tavily.com") {
+      assert.equal(body.query, "杭州市西湖区 今天的天气怎么样");
+      assert.equal(body.include_answer, false);
+      return Response.json({
+        answer: "纽约晴天",
+        results: [
+          {
+            title: "纽约天气",
+            content: "纽约晴天",
+            url: "https://example.org/ny",
+          },
+          ...(includeLocalSource
+            ? [
+                {
+                  title: "杭州西湖天气",
+                  content: "西湖区有雨",
+                  url: "https://example.org/xihu",
+                },
+              ]
+            : []),
+        ],
+      });
+    }
+    const prompt = body.messages.at(-1).content;
+    assert.match(prompt, /目标地区：杭州市西湖区/);
+    assert.doesNotMatch(prompt, /纽约/);
+    return Response.json({
+      choices: [{ message: { content: "杭州西湖区有雨。" } }],
+    });
+  };
+  const weatherIntent = {
+    action: "answer",
+    question: "纽约今天的天气怎么样",
+    needsSearch: true,
+    confidence: 1,
+    source: "llm",
+  };
+  const ask = (deviceId) =>
+    executeAssistantIntent(
+      weatherIntent,
+      "今天的天气怎么样",
+      store,
+      miot,
+      fetchImpl,
+      { deviceId, origin: "voice" },
+    );
+  const answer = await ask("b");
+  assert.equal(answer.message, "杭州西湖区有雨。");
+  assert.deepEqual(
+    answer.sources.map(({ url }) => url),
+    ["https://example.org/xihu"],
+  );
+  assert.deepEqual(spoken.at(-1), {
+    deviceId: "b",
+    command: "tts",
+    text: answer.message,
+  });
+  const clarify = await ask("c");
+  assert.equal(clarify.executionStatus, "needs_input");
+  assert.equal(clarify.spokenPrompt, "你想查哪个城市或区县？");
+  assert.equal(spoken.at(-1).deviceId, "c");
+  includeLocalSource = false;
+  const noMatch = await ask("b");
+  assert.equal(noMatch.searchUsed, false);
+  assert.match(noMatch.message, /没有查到杭州市西湖区/);
+  const status = await executeAssistantIntent(
+    {
+      action: "device_status",
+      field: "overview",
+      confidence: 1,
+      source: "llm",
+    },
+    "音箱状态怎么样",
+    store,
+    miot,
+    fetchImpl,
+    { deviceId: "b", origin: "voice" },
+  );
+  assert.deepEqual(reads, ["b"]);
+  assert.match(status.message, /杭州市西湖区.*播放已暂停.*晴天.*百分之37/);
+});
 
 test("HTTP route validates input and returns the assistant decision", async () => {
   const router = new IntentRouter();

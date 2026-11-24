@@ -1,3 +1,5 @@
+import type { RuntimeLog } from "../storage/runtime-log.ts";
+import { logError } from "../storage/log-details.ts";
 import type { MiotClient, PlaybackStatus } from "../miot/client.ts";
 import type { MusicTrack, PlaybackResolution } from "../music/types.ts";
 import type { JsonStore, StoredTrack } from "../storage/store.ts";
@@ -35,6 +37,7 @@ export class PlaybackService {
   ) => Promise<string | PlaybackResolution>;
   private readonly scopeDeviceId?: string;
   private readonly resolveFirstPlayable?: ResolveFirstPlayable;
+  private readonly logs?: RuntimeLog;
   private playbackResolution:
     | { id: string; sourceId: string; info: Omit<PlaybackResolution, "url"> }
     | undefined;
@@ -65,11 +68,13 @@ export class PlaybackService {
     ) => Promise<string | PlaybackResolution>,
     scopeDeviceId?: string,
     resolveFirstPlayable?: ResolveFirstPlayable,
+    logs?: RuntimeLog,
   ) {
     this.store = store;
     this.scopeDeviceId = scopeDeviceId;
     this.miot = miot;
     this.resolveFirstPlayable = resolveFirstPlayable;
+    this.logs = logs;
     this.resolveTrack =
       resolveTrack ??
       (async (track) => {
@@ -434,8 +439,11 @@ export class PlaybackService {
           () => this.currentSession() === session,
         );
       });
-    } catch {
+    } catch (error) {
       if (this.currentSession() === session) {
+        this.logs?.detail("ERROR", "playback.advance_failed", {
+          error: logError(error),
+        });
         session.enabled = false;
         this.lastError = "自动续播失败，请检查音箱和音源后手动点击下一首重试";
       }
@@ -615,6 +623,7 @@ export class PlaybackService {
     await this.updateStore((state) => {
       state.config.playbackMode = mode;
     });
+    this.logs?.detail("INFO", "playback.mode_changed", { mode });
     return mode;
   }
 
@@ -771,6 +780,15 @@ export class PlaybackService {
         info,
       };
     } else this.playbackResolution = undefined;
+    this.logs?.detail("INFO", "playback.accepted", {
+      title: track.title,
+      artist: track.artist,
+      index,
+      queueLength: tracks.length,
+      mode: this.config().playbackMode,
+      automatic: Boolean(isCurrent),
+      resolution: this.resolution(),
+    });
     return {
       success: true,
       message: "正在播放《" + track.title + "》",

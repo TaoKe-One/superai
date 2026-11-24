@@ -2,6 +2,7 @@ import { isPlaybackMode } from "../playback/mode.ts";
 import { isLxPlatform } from "../music/lx/platforms.ts";
 import { parseRuleIntent } from "./rules.ts";
 import { serviceJson } from "../security/http.ts";
+import { isDeviceStatusField } from "./types.ts";
 import type {
   AssistantIntent,
   ControlCommand,
@@ -30,7 +31,7 @@ function isMiniMaxChat(baseUrl: string): boolean {
 const systemPrompt = [
   "你是智能音箱的意图路由器。判断用户是在点歌、控制播放，还是提出普通问题。理解自然表达，不要求固定触发词；结合最近对话理解省略的歌名、艺人和指代。历史消息只用于理解当前请求。只返回 JSON，不要解释。",
   "",
-  "JSON 字段：action 必须是 play_song、play_artist、play_playlist、control、set_playback_mode、set_volume、answer、clarify、native 之一；confidence 是 0 到 1 的数值。",
+  "JSON 字段：action 必须是 play_song、play_artist、play_playlist、control、set_playback_mode、set_volume、answer、device_status、clarify、native 之一；confidence 是 0 到 1 的数值。",
   "- play_song: title 必填，artist 可选。用户明确指定点歌平台时填 platform：网易云 wy、QQ 音乐 tx、酷狗 kg、酷我 kw、咪咕 mg。没有指定则省略，歌名和歌手不含平台名。",
   "- play_artist: artist 必填。用户想听这位艺人的几首热门、经典或代表性作品时，将 preference 设为 popular；artist 只填艺人名。音乐工具会挑选曲目，请勿凭空填歌名。",
   "- play_playlist: playlist 必填。",
@@ -38,6 +39,9 @@ const systemPrompt = [
   "- set_playback_mode: mode 必须是 order（顺序播放）、loop（列表循环）、single（单曲循环）或 random（随机播放）。仅在用户要求更改播放模式时选择这个动作。",
   "- set_volume: volume 是 0 到 100 的整数；若用户只说调大或调小，且历史里没有确定音量，不要猜数字，使用 clarify。",
   "- answer: question 保留用户原问题。涉及实时信息、天气、新闻、价格或用户要求联网查证时，needsSearch 为 true。其他问题需要填写 needsSearch: false，并在 answer 中用一到两句口语给出完整回答，供音箱直接播报。",
+  "- 对天气、空气质量、附近活动或交通等依赖地点的问题，若用户说本地、这里或未给地点，填 locationMode: local，保留日期、事项等信息，不填写猜测的城市。若用户明确说了地名或此前已经明确了地点，填 locationMode: explicit，question 必须包含用户给出的地名。普通非地域问题省略 locationMode。",
+  "只有用户明确给出的地点才算已指定。历史中助手提到的城市可能只是上一轮的搜索结果，不可据此推断用户所在的地点。",
+  "- device_status: 用户询问当前音箱的位置、音量、正在播放什么或在线状态时，field 分别填 location、volume、playback 或 overview。需要实时读取数据，勿猜测。询问周边天气、气温或空气质量属于 answer，并非读取室内传感器。",
   "- clarify: question 填写一句简短澄清问题。",
   "如果上一轮已问用户补充信息，当前输入可能只给歌手、地点等片段。结合原请求和补充内容决定完整意图，不把片段单独当成新任务。明确的新请求优先。追问同一话题时，answer.question 写包含所指对象的完整问题，供联网工具查询。只问仍缺失的必要信息。",
   "- native: 家电、红外、米家场景、闹钟或提醒等原生操作，reason 说明保留原生处理。不要声称已执行，不要归为 answer。设备知识问题仍属于 answer。",
@@ -63,6 +67,7 @@ const validActions = new Set<ModelIntent["action"]>([
   "set_volume",
   "set_playback_mode",
   "answer",
+  "device_status",
   "clarify",
 ]);
 
@@ -170,6 +175,18 @@ export function normalizeModelIntent(
           ? { answer: model.answer.trim() }
           : {}),
         needsSearch: model.needsSearch === true,
+        ...(model.locationMode === "local" || model.locationMode === "explicit"
+          ? { locationMode: model.locationMode }
+          : {}),
+        confidence,
+        source,
+      };
+    case "device_status":
+      if (!isDeviceStatusField(model.field))
+        throw new Error("意图模型返回了未知音箱状态字段");
+      return {
+        action: "device_status",
+        field: model.field,
         confidence,
         source,
       };

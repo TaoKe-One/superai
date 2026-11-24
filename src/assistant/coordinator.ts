@@ -9,6 +9,7 @@ import {
 } from "./execution.ts";
 import type { ConversationTurn } from "./types.ts";
 import { DeviceCommandError } from "../miot/client.ts";
+import { assistantLogResult, logError } from "../storage/log-details.ts";
 import { LxResolutionError } from "../music/lx/health.ts";
 
 const HISTORY_MS = 2 * 60_000;
@@ -47,7 +48,10 @@ export interface VoiceEvent {
 export class VoiceCoordinator {
   private readonly understand: (deviceId: string) => UnderstandingAgent;
   private readonly executor: ExecutionAgent;
-  private readonly onResult?: (status: VoiceEvent["status"]) => void;
+  private readonly onResult?: (
+    event: VoiceEvent,
+    details?: Record<string, unknown>,
+  ) => void;
   private readonly events: VoiceEvent[] = [];
   private readonly jobs = new Map<
     string,
@@ -64,7 +68,7 @@ export class VoiceCoordinator {
   constructor(
     understand: (deviceId: string) => UnderstandingAgent,
     executor: ExecutionAgent,
-    onResult?: (status: VoiceEvent["status"]) => void,
+    onResult?: VoiceCoordinator["onResult"],
     wakeForReply?: VoiceCoordinator["wakeForReply"],
   ) {
     this.understand = understand;
@@ -129,14 +133,18 @@ export class VoiceCoordinator {
     previous?.controller.abort();
     const controller = new AbortController();
     // Wait for an already submitted device operation before the next device task.
+    let details: Record<string, unknown> | undefined;
     const done = (previous?.done ?? Promise.resolve())
-      .then(() => this.run(event, controller.signal))
-      .catch(() => {
+      .then(async () => {
+        details = await this.run(event, controller.signal);
+      })
+      .catch((error) => {
+        details = { error: logError(error) };
         event.status = "failed";
         event.message = "语音任务未完成";
       })
       .finally(() => {
-        this.onResult?.(event.status);
+        this.onResult?.(event, details);
         if (this.jobs.get(device.deviceId)?.controller === controller)
           this.jobs.delete(device.deviceId);
       });
@@ -208,6 +216,7 @@ export class VoiceCoordinator {
     let sending = false;
     let accepted = false;
     let index = -1;
+    const results: Record<string, unknown>[] = [];
     const stage = (name: string, task = index) => {
       event.stages.push({
         name,
@@ -259,6 +268,7 @@ export class VoiceCoordinator {
             stage(name);
           },
         });
+        results.push({ task: index, ...assistantLogResult(result) });
         task.message =
           typeof result.message === "string"
             ? result.message.slice(0, 1000)
@@ -309,9 +319,10 @@ export class VoiceCoordinator {
         const promptTask = event.tasks.findLastIndex(
           (task) => task.status === "needs_input",
         );
-        this.wakeAfterPrompt(event.deviceId, followUp, (name) =>
-          stage(name, promptTask),
-        );
+        this.wakeAfterPrompt(event.deviceId, followUp, (name) => {
+          stage(name, promptTask);
+          this.onResult?.(event, { wake: name, task: promptTask });
+        });
       }
       event.status = event.tasks.some((task) => task.status === "failed")
         ? "failed"
@@ -358,6 +369,8 @@ export class VoiceCoordinator {
       for (const task of event.tasks)
         if (task.status === "pending") task.status = "cancelled";
       stage(event.status);
+      return { results, ...(signal.aborted ? {} : { error: logError(error) }) };
     }
+    return { results };
   }
 }
