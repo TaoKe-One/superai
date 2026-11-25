@@ -10,7 +10,7 @@ Run `curl http://127.0.0.1:8787/healthz` on the deployment host. If that works, 
 
 In **Player → Music Sources**, check that the source is enabled, supports the target platform, and passes its availability check. Retry the same track and source. If charts are empty, switch catalog platforms and check connectivity to the catalog API. For private libraries, check the service URL, credentials, and WebDAV scan status. [Music source settings](usage.en.md#connect-music-libraries-and-sources)
 
-If LX reports a Fake-IP error, the v0.1.1 Docker image enables encrypted DNS by default. For an existing container that explicitly sets it to `false`, set `LX_DNS_OVER_HTTPS=true` and recreate the container. If the network cannot reach the encrypted resolver, configure system DNS to return real public addresses. [v0.1.1 release notes](https://github.com/TaoKe-One/superai/releases/tag/v0.1.1)
+Starting with v0.1.6, SuperAI handles common DNS changes automatically. After turning off a proxy, online music remains reachable if the host's system DNS returns public addresses. If the log reports Fake-IP and says it could not obtain a usable public address, check that the host can resolve public addresses through system DNS or reach the encrypted resolver. [DNS for online music](deployment.en.md#dns-for-online-music)
 
 ## A track plays in the browser but the speaker stays silent
 

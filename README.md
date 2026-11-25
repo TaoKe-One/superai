@@ -32,7 +32,7 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.5
+  taokeone/superai:0.1.6
 ```
 
 配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ docker run -d --name superai --restart unless-stopped \
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.5
+docker pull ghcr.io/taoke-one/superai:0.1.6
 ```
 
 ### 方式二：Docker Compose
@@ -52,7 +52,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.5
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.5
+    image: taokeone/superai:0.1.6
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,7 +69,7 @@ volumes:
 docker compose up -d
 ```
 
-也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.5`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
+也可以将 `image` 改为 `ghcr.io/taoke-one/superai:0.1.6`。已有 Compose 部署请在原项目中更新镜像，以继续使用原数据卷。[仓库内的 Compose 配置](docs/deployment.md#docker-compose)
 
 ### 方式三：命令行
 

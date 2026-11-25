@@ -9,6 +9,9 @@ const context = new AsyncLocalStorage<{
   fetchImpl?: typeof fetch;
   signal: AbortSignal;
 }>();
+const DOH_TIMEOUT_MS = 1500;
+const DOH_RETRY_DELAY_MS = 30_000;
+let dohRetryAfter = 0;
 const dnsCache = new Map<
   string,
   { expires: number; addresses: Array<{ address: string; family: number }> }
@@ -90,19 +93,7 @@ export async function publicRequest(
   const url = publicUrl(raw);
   if (redirects > 4) throw new Error("音乐源跳转次数过多");
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  const addresses =
-    process.env.LX_DNS_OVER_HTTPS === "true" && !isIP(host)
-      ? await encryptedDns(host, signal)
-      : await abortable(lookup(host, { all: true }), signal);
-  if (!addresses.length || addresses.some((a) => !isPublicAddress(a.address)))
-    throw new Error(
-      addresses.some(
-        (a) =>
-          a.address.startsWith("198.18.") || a.address.startsWith("198.19."),
-      )
-        ? "系统 DNS 返回代理 Fake-IP；请设置 LX_DNS_OVER_HTTPS=true 后重启平台"
-        : "音乐源不能访问本机或私有网络",
-    );
+  const addresses = await resolvePublicAddresses(host, signal);
   let data: Buffer | undefined;
   const headers: Record<string, string> = {
     "user-agent": "SpeakerPlatform-LX/1.0",
@@ -256,12 +247,62 @@ export async function publicRequest(
   });
 }
 
-// Optional fixed public DoH resolver for hosts using proxy Fake-IP DNS. TLS still
-// verifies cloudflare-dns.com; scripts cannot choose the resolver or its address.
+async function resolvePublicAddresses(host: string, signal: AbortSignal) {
+  const family = isIP(host);
+  if (family) return [{ address: host, family }]; // publicUrl already checks IP literals.
+
+  const mode = process.env.LX_DNS_OVER_HTTPS?.trim().toLowerCase();
+  let encryptedError: unknown;
+  if (mode === "true") {
+    try {
+      return await encryptedDns(host, signal);
+    } catch (error) {
+      signal.throwIfAborted();
+      encryptedError = error;
+    }
+  }
+
+  const addresses = await abortable(lookup(host, { all: true }), signal);
+  if (
+    addresses.length &&
+    addresses.every(({ address }) => isPublicAddress(address))
+  )
+    return addresses;
+
+  // A private or mixed answer remains blocked. Only a set consisting entirely
+  // of Fake-IP addresses can trigger an automatic lookup with a public resolver.
+  if (
+    !addresses.length ||
+    !addresses.every(({ address }) => /^198\.(?:18|19)\./.test(address))
+  )
+    throw new Error("音乐源不能访问本机或私有网络");
+  if (mode === "false")
+    throw new Error(
+      "系统 DNS 返回代理 Fake-IP，且加密 DNS 已关闭。请检查网络 DNS 设置",
+    );
+
+  try {
+    if (mode === "true") throw encryptedError;
+    return await encryptedDns(host, signal);
+  } catch (error) {
+    signal.throwIfAborted();
+    const reason = error instanceof Error ? error.message : "加密 DNS 解析失败";
+    throw new Error(
+      "系统 DNS 返回代理 Fake-IP，无法获取可用的公网地址：" + reason,
+    );
+  }
+}
+
+// Fixed public DoH endpoint with verified TLS. A network timeout briefly
+// suppresses new DoH requests so healthy system DNS can keep working.
 async function encryptedDns(host: string, outerSignal: AbortSignal) {
+  outerSignal.throwIfAborted();
   const cached = dnsCache.get(host);
   if (cached && cached.expires > Date.now()) return cached.addresses;
-  const signal = AbortSignal.any([outerSignal, AbortSignal.timeout(8000)]);
+  if (Date.now() < dohRetryAfter)
+    throw new Error("加密 DNS 连接超时，稍后重试");
+  const timeout = AbortSignal.timeout(DOH_TIMEOUT_MS);
+  const signal = AbortSignal.any([outerSignal, timeout]);
   const addresses = await new Promise<
     Array<{ address: string; family: number }>
   >((resolve, reject) => {
@@ -269,6 +310,7 @@ async function encryptedDns(host: string, outerSignal: AbortSignal) {
       {
         hostname: "cloudflare-dns.com",
         servername: "cloudflare-dns.com",
+        rejectUnauthorized: true,
         path: "/dns-query?type=A&name=" + encodeURIComponent(host),
         headers: { accept: "application/dns-json" },
         signal,
@@ -300,12 +342,14 @@ async function encryptedDns(host: string, outerSignal: AbortSignal) {
         });
       },
     );
-    req.on("error", () =>
-      reject(
-        new Error("加密 DNS 解析失败，请检查外网连接或关闭 LX_DNS_OVER_HTTPS"),
-      ),
-    );
+    req.on("error", reject);
     req.end();
+  }).catch((error) => {
+    outerSignal.throwIfAborted();
+    if (!timeout.aborted)
+      throw new Error("加密 DNS 解析失败", { cause: error });
+    dohRetryAfter = Date.now() + DOH_RETRY_DELAY_MS;
+    throw new Error("加密 DNS 连接超时", { cause: error });
   });
   if (dnsCache.size >= 256) dnsCache.delete(dnsCache.keys().next().value!);
   dnsCache.set(host, { expires: Date.now() + 60000, addresses });

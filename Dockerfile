@@ -4,7 +4,7 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
     DATA_DIR=/data \
-    LX_DNS_OVER_HTTPS=true
+    LX_DNS_OVER_HTTPS=auto
 
 WORKDIR /app
 COPY package.json package-lock.json ./

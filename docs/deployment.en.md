@@ -9,7 +9,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.5
+  taokeone/superai:0.1.6
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.5
+docker pull ghcr.io/taoke-one/superai:0.1.6
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.5
+    image: taokeone/superai:0.1.6
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 To use the Compose file included in the repository, run this in the project root. Existing installations should keep the same Compose project and data volume.
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.5 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.6 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
@@ -67,6 +67,18 @@ npm start
 Data goes into `data/` by default. Set `DATA_DIR` in `.env` to choose a persistent directory. In-app releases are stored in the data directory and remain active after a restart.
 
 GitHub-generated source archives include `test/` for development and CI. If you have a separately distributed `*-deploy.zip`, extract it and follow the same steps. Deployment ZIPs and Docker images exclude test files.
+
+## DNS for online music
+
+Docker, Compose, and command-line installations default to `LX_DNS_OVER_HTTPS=auto`. LX requests try the host's system DNS first. SuperAI sends the queried hostname to Cloudflare's DNS over HTTPS service only when every system DNS answer is a proxy Fake-IP address (`198.18.0.0/15`).
+
+| Setting          | Behavior                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` (default) | Use validated system DNS addresses first. Try encrypted DNS when system DNS returns only Fake-IP addresses.                     |
+| `true`           | Preserve the preference for encrypted DNS in existing installations and fall back to validated system DNS addresses on failure. |
+| `false`          | Use system DNS only.                                                                                                            |
+
+Encrypted DNS requests have a 1.5-second deadline. A timeout pauses new encrypted DNS requests for 30 seconds. Each connection and redirect validates the destination. Connections require public addresses and reject private or mixed answers. Existing containers can keep their `true` or `false` setting when upgrading.
 
 ## One-click upgrades in Settings
 
@@ -96,7 +108,7 @@ An existing container deployed with `-p 127.0.0.1:8787:8787` accepts connections
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.5
+  taokeone/superai:0.1.6
 ```
 
 For the repository Compose file, set `PUBLISH_HOST` to `0.0.0.0` or the host's LAN IP in the existing project's `.env`, then run `docker compose up -d`. With the standalone Compose example in the README, edit `ports` directly. For Node.js, set `HOST` and restart the process.

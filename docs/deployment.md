@@ -9,7 +9,7 @@ Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本�
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.5
+  taokeone/superai:0.1.6
 ```
 
 配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ docker run -d --name superai --restart unless-stopped \
 也可以直接拉取 GitHub 镜像，或将上面的镜像名替换为同一地址。
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.5
+docker pull ghcr.io/taoke-one/superai:0.1.6
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.5
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.5
+    image: taokeone/superai:0.1.6
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 也可在源码目录使用仓库内的 Compose 文件。已有部署请沿用原 Compose 项目与数据卷。
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.5 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.6 docker compose up -d --no-build --pull always
 ```
 
 可把 `SUPERAI_IMAGE` 保存到 `.env`，需要升级时更换版本标签，再执行 `docker compose up -d --no-build --pull always`。如果要从本地源码构建，移除 `SUPERAI_IMAGE` 后执行 `docker compose up -d --build`。
@@ -67,6 +67,18 @@ npm start
 默认写入项目下的 `data/`。首次部署或更换机器时，可在 `.env` 中通过 `DATA_DIR` 指定持久化目录。后台安装的版本保存在数据目录中，重启后会继续使用。
 
 GitHub 自动生成的源码包包含供开发和 CI 使用的 `test/` 目录。若拿到单独分发的 `*-deploy.zip`，解压后也可按上面步骤部署。部署 ZIP 和 Docker 镜像均已排除测试文件。
+
+## 在线音乐 DNS
+
+Docker、Compose 和命令行部署默认使用 `LX_DNS_OVER_HTTPS=auto`。LX 请求优先使用部署机的系统 DNS。只有解析结果全部是代理的 Fake-IP 地址（`198.18.0.0/15`）时，才会把查询域名发给 Cloudflare 的 DNS over HTTPS 服务。
+
+| 设置           | 行为                                                                        |
+| -------------- | --------------------------------------------------------------------------- |
+| `auto`（默认） | 优先使用通过校验的系统 DNS 地址。系统 DNS 只返回 Fake-IP 时，尝试加密 DNS。 |
+| `true`         | 兼容旧部署，先尝试加密 DNS，失败后回退到通过校验的系统 DNS 地址。           |
+| `false`        | 仅使用系统 DNS。                                                            |
+
+加密 DNS 单次最多等待 1.5 秒。连接超时后会暂停发起新查询 30 秒。每次连接及跳转都校验目标地址。只有真实公网地址可以用于连接，检测到私网地址或混合结果时会阻断。原有容器里的 `true` 或 `false` 在升级后仍可继续使用。
 
 ## 后台一键升级
 
@@ -96,7 +108,7 @@ README 中的 Docker 和 Docker Compose 快速部署示例将端口发布到宿�
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.5
+  taokeone/superai:0.1.6
 ```
 
 使用仓库自带的 Compose 配置时，在原项目的 `.env` 中将 `PUBLISH_HOST` 设为 `0.0.0.0` 或部署机的局域网 IP，再执行 `docker compose up -d`。使用 README 的独立 Compose 示例时，直接修改 `ports`。使用 Node.js 时，设置 `HOST` 后重启。
