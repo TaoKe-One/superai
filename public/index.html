@@ -208,6 +208,23 @@
       .view.active {
         display: block;
       }
+      .layout:has(#view-player.active) {
+        height: calc(100dvh - 62px);
+        min-height: 300px;
+      }
+      .layout:has(#view-player.active) .content {
+        min-height: 0;
+      }
+      #view-player.active,
+      #lxPlayer {
+        height: 100%;
+      }
+      #lxPlayer {
+        display: block;
+        width: 100%;
+        border: 0;
+        border-radius: 10px;
+      }
       .page-head {
         display: flex;
         justify-content: space-between;
@@ -461,6 +478,15 @@
         .layout {
           display: block;
           padding: 18px 14px;
+        }
+        .layout:has(#view-player.active) {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          min-height: 340px;
+        }
+        .layout:has(#view-player.active) .content {
+          flex: 1;
         }
         .nav {
           position: static;
@@ -794,13 +820,6 @@
             <iframe
               id="lxPlayer"
               title="LX 音乐播放器"
-              style="
-                width: 100%;
-                height: calc(100dvh - 112px);
-                min-height: 520px;
-                border: 0;
-                border-radius: 10px;
-              "
               allow="clipboard-write"
             ></iframe>
           </section>

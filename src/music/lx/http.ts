@@ -87,6 +87,7 @@ export async function publicRequest(
   statusCode: number;
   statusMessage: string;
   bytes: number;
+  finalUrl?: string;
   headers: Record<string, any>;
 }> {
   if (signal.aborted) throw new Error("音乐源请求超时");
@@ -229,6 +230,7 @@ export async function publicRequest(
               statusCode: res.statusCode ?? 0,
               statusMessage: res.statusMessage ?? "",
               bytes: raw.length,
+              ...(options.captureFinalUrl ? { finalUrl: url.href } : {}),
               headers: res.headers,
             });
           } catch (error) {
@@ -454,6 +456,7 @@ export function httpFetch(url: string, options: Record<string, any> = {}) {
           body: value,
           raw,
           statusCode: response.status,
+          ...(options.captureFinalUrl ? { finalUrl: response.url } : {}),
           headers: Object.fromEntries(response.headers),
         };
       })()

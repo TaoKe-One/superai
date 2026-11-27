@@ -202,32 +202,6 @@ globalThis.SpeakerPrivateCatalog = ({
                   ),
                 ]
               : []),
-            state.providerId
-              ? h(
-                  "nav",
-                  {
-                    class: "sp-catalog-pagination",
-                    "aria-label": "私有库分页",
-                  },
-                  [
-                    button(
-                      "上一页",
-                      () => void load(state.page - 1),
-                      state.loading || state.page <= 1,
-                    ),
-                    h(
-                      "span",
-                      { "aria-live": "polite" },
-                      "第 " + state.page + " 页",
-                    ),
-                    button(
-                      "下一页",
-                      () => void load(state.page + 1),
-                      state.loading || !state.hasMore,
-                    ),
-                  ],
-                )
-              : null,
           ]),
           !state.providerId
             ? h(
@@ -248,7 +222,11 @@ globalThis.SpeakerPrivateCatalog = ({
                 activeSongId: player.activeSongKey,
                 loading: state.loading,
                 isFlat: true,
-                showPagination: false,
+                showPagination: true,
+                paginationMode: "simple",
+                hasMore: state.hasMore,
+                returnedCount: state.items.length,
+                onPageChange: (page) => void load(page),
                 selectable: true,
                 showDownloadBtn: false,
                 filterableColumns: ["singer", "album"],
@@ -280,6 +258,32 @@ globalThis.SpeakerPrivateCatalog = ({
                   ? h("p", { class: "sp-empty" }, "没有找到目录。")
                   : null,
               ]),
+          !isSongs() && state.providerId && (state.page > 1 || state.hasMore)
+            ? h(
+                "nav",
+                {
+                  class: "sp-catalog-pagination",
+                  "aria-label": "私有库分页",
+                },
+                [
+                  button(
+                    "上一页",
+                    () => void load(state.page - 1),
+                    state.loading || state.page <= 1,
+                  ),
+                  h(
+                    "span",
+                    { "aria-live": "polite" },
+                    "第 " + state.page + " 页",
+                  ),
+                  button(
+                    "下一页",
+                    () => void load(state.page + 1),
+                    state.loading || !state.hasMore,
+                  ),
+                ],
+              )
+            : null,
           h(importModal, {
             show: state.importing,
             songs: state.importSongs,

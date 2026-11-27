@@ -14,7 +14,7 @@ Starting with v0.1.6, SuperAI handles common DNS changes automatically. After tu
 
 ## A track plays in the browser but the speaker stays silent
 
-Confirm the target speaker is online under **Speaker Devices**. For private library casts, set a platform URL reachable from the speaker using the host's LAN address and published port. If the cast is accepted and playback progress stays at zero, check whether the speaker can reach the audio URL. Some firmware can use the song URL relay. [Audio relay setup](deployment.en.md#cast-accepted-but-no-audio)
+Confirm the target speaker is online under **Speaker Devices**. For private library casts, set a platform URL reachable from the speaker using the host's LAN address and published port. If the cast is accepted and playback progress stays at zero, check whether the speaker can reach the audio URL. If some QQ Music links repeatedly leave a Xiaomi Speaker Play (L05C) at zero, try the song URL relay. Adding its Docker port mapping requires recreating the container with the original data volume. [Audio relay setup](deployment.en.md#cast-accepted-but-no-audio)
 
 ## No speakers appear after QR sign-in
 

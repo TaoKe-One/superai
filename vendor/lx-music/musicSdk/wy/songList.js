@@ -4,7 +4,7 @@
 // https://github.com/Binaryify/NeteaseCloudMusicApi/blob/master/module/top_playlist.js
 // https://github.com/Binaryify/NeteaseCloudMusicApi/blob/master/module/playlist_detail.js
 
-import { weapi, linuxapi } from './utils/crypto.js'
+import { weapi } from './utils/crypto.js'
 import { httpFetch } from '../../request.js'
 import { formatPlayTime, sizeFormate, dateFormat, formatPlayCount } from '../../index.js'
 import musicDetailApi from './musicDetail.js'
@@ -37,11 +37,10 @@ export default {
   async handleParseId(link, retryNum = 0) {
     if (retryNum > 2) throw new Error('link try max num')
 
-    const requestObj_listDetailLink = httpFetch(link)
-    const { headers: { location }, statusCode } = await requestObj_listDetailLink.promise
-    // console.log(headers)
-    if (statusCode > 400) return this.handleParseId(link, ++retryNum)
-    const url = location == null ? link : location
+    const requestObj_listDetailLink = httpFetch(link, { captureFinalUrl: true })
+    const { headers: { location }, statusCode, finalUrl } = await requestObj_listDetailLink.promise
+    if (statusCode >= 400) return this.handleParseId(link, retryNum + 1)
+    const url = location ? new URL(location, link).href : finalUrl || link
     return this.regExps.listDetailLink.test(url)
       ? url.replace(this.regExps.listDetailLink, '$1')
       : url.replace(this.regExps.listDetailLink2, '$1')
@@ -66,61 +65,67 @@ export default {
     }
     return { id, cookie }
   },
-  async getListDetail(rawId, page, tryNum = 0) { // 获取歌曲列表内的音乐
-    if (tryNum > 2) return Promise.reject(new Error('try max num'))
-
+  async getListDetail(rawId, page) {
     const { id, cookie } = await this.getListId(rawId)
-    if (cookie) this.cookie = cookie
+    if (!/^\d+$/.test(id)) throw new Error('无法识别网易云歌单 ID')
+    return this.fetchListDetail(id, page, cookie)
+  },
+  async fetchListDetail(id, page, cookie, attempt = 0) {
 
-    const requestObj_listDetail = httpFetch('https://music.163.com/api/linux/forward', {
+    const requestObj_listDetail = httpFetch('https://music.163.com/weapi/v3/playlist/detail', {
       method: 'post',
       headers: {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
-        Cookie: this.cookie,
+        Cookie: cookie ?? this.cookie,
+        Referer: 'https://music.163.com/',
       },
-      form: linuxapi({
-        method: 'POST',
-        url: 'https://music.163.com/api/v3/playlist/detail',
-        params: {
-          id,
-          n: this.limit_song,
-          s: 8,
-        },
+      form: weapi({
+        id,
+        n: this.limit_song,
+        s: 8,
+        csrf_token: '',
       }),
     })
     const { statusCode, body } = await requestObj_listDetail.promise
-    if (statusCode !== 200 || body.code !== this.successCode) return this.getListDetail(id, page, ++tryNum)
-    let limit = 1000
-    let rangeStart = (page - 1) * limit
-    // console.log(body)
-    let list
-    if (body.playlist.trackIds.length == body.privileges.length) {
-      list = this.filterListDetail(body)
-    } else {
-      try {
-        list = (await musicDetailApi.getList(body.playlist.trackIds.slice(rangeStart, limit * page).map(trackId => trackId.id))).list
-      } catch (err) {
-        console.log(err)
-        if (err.message == 'try max num') {
-          throw err
-        } else {
-          return this.getListDetail(id, page, ++tryNum)
+    const playlist = body?.playlist
+    if (statusCode !== 200 || body?.code !== this.successCode || !Array.isArray(playlist?.trackIds)) {
+      if (attempt >= 2) throw new Error('网易云歌单详情暂不可用')
+      return this.fetchListDetail(id, page, cookie, attempt + 1)
+    }
+    const limit = 1000
+    const pageIds = playlist.trackIds.slice((page - 1) * limit, page * limit).map(track => track.id)
+    let list = []
+    if (pageIds.length) {
+      if (playlist.trackIds.length === playlist.tracks?.length && playlist.tracks.length === body.privileges?.length) {
+        list = this.filterListDetail(body)
+      } else {
+        try {
+          // Fit each response within the transport size limit.
+          const batches = []
+          for (let start = 0; start < pageIds.length; start += 200) {
+            batches.push(musicDetailApi.getList(pageIds.slice(start, start + 200)))
+          }
+          list = (await Promise.all(batches)).flatMap(result => result.list)
+        } catch (error) {
+          if (attempt >= 2) throw error
+          return this.fetchListDetail(id, page, cookie, attempt + 1)
         }
       }
+      const tracks = new Map(list.map(track => [track.songmid, track]))
+      list = pageIds.map(id => tracks.get(id)).filter(Boolean)
     }
-    // console.log(list)
     return {
       list,
       page,
       limit,
-      total: body.playlist.trackIds.length,
+      total: playlist.trackIds.length,
       source: 'wy',
       info: {
-        play_count: formatPlayCount(body.playlist.playCount),
-        name: body.playlist.name,
-        img: body.playlist.coverImgUrl,
-        desc: body.playlist.description,
-        author: body.playlist.creator.nickname,
+        play_count: formatPlayCount(playlist.playCount),
+        name: playlist.name,
+        img: playlist.coverImgUrl,
+        desc: playlist.description,
+        author: playlist.creator?.nickname,
       },
     }
   },

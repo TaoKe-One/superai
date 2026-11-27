@@ -57,6 +57,104 @@ while (pending.length) {
       "this.getLyric(id, accessKey, fmt, ++tryNum)",
       "this.getLyricDownload(id, accessKey, fmt, ++tryNum)",
     );
+  // NetEase's web endpoint may embed only a preview of a longer playlist.
+  if (path.endsWith("/wy/songList.js")) {
+    const start = code.indexOf("  async getListDetail(");
+    const end = code.indexOf("  filterListDetail(", start);
+    const share = "    const url = location == null ? link : location";
+    if (
+      start < 0 ||
+      end < 0 ||
+      !code
+        .slice(start, end)
+        .includes("https://music.163.com/api/linux/forward") ||
+      !code.includes(share)
+    )
+      throw new Error("WY playlist detail anchor changed");
+    code =
+      code.slice(0, start) +
+      String.raw`  async getListDetail(rawId, page) {
+    const { id, cookie } = await this.getListId(rawId)
+    if (!/^\d+$/.test(id)) throw new Error('无法识别网易云歌单 ID')
+    return this.fetchListDetail(id, page, cookie)
+  },
+  async fetchListDetail(id, page, cookie, attempt = 0) {
+
+    const requestObj_listDetail = httpFetch('https://music.163.com/weapi/v3/playlist/detail', {
+      method: 'post',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+        Cookie: cookie ?? this.cookie,
+        Referer: 'https://music.163.com/',
+      },
+      form: weapi({
+        id,
+        n: this.limit_song,
+        s: 8,
+        csrf_token: '',
+      }),
+    })
+    const { statusCode, body } = await requestObj_listDetail.promise
+    const playlist = body?.playlist
+    if (statusCode !== 200 || body?.code !== this.successCode || !Array.isArray(playlist?.trackIds)) {
+      if (attempt >= 2) throw new Error('网易云歌单详情暂不可用')
+      return this.fetchListDetail(id, page, cookie, attempt + 1)
+    }
+    const limit = 1000
+    const pageIds = playlist.trackIds.slice((page - 1) * limit, page * limit).map(track => track.id)
+    let list = []
+    if (pageIds.length) {
+      if (playlist.trackIds.length === playlist.tracks?.length && playlist.tracks.length === body.privileges?.length) {
+        list = this.filterListDetail(body)
+      } else {
+        try {
+          // Fit each response within the transport size limit.
+          const batches = []
+          for (let start = 0; start < pageIds.length; start += 200) {
+            batches.push(musicDetailApi.getList(pageIds.slice(start, start + 200)))
+          }
+          list = (await Promise.all(batches)).flatMap(result => result.list)
+        } catch (error) {
+          if (attempt >= 2) throw error
+          return this.fetchListDetail(id, page, cookie, attempt + 1)
+        }
+      }
+      const tracks = new Map(list.map(track => [track.songmid, track]))
+      list = pageIds.map(id => tracks.get(id)).filter(Boolean)
+    }
+    return {
+      list,
+      page,
+      limit,
+      total: playlist.trackIds.length,
+      source: 'wy',
+      info: {
+        play_count: formatPlayCount(playlist.playCount),
+        name: playlist.name,
+        img: playlist.coverImgUrl,
+        desc: playlist.description,
+        author: playlist.creator?.nickname,
+      },
+    }
+  },
+` +
+      code.slice(end);
+    code = code
+      .replace("httpFetch(link)", "httpFetch(link, { captureFinalUrl: true })")
+      .replace(
+        "const { headers: { location }, statusCode }",
+        "const { headers: { location }, statusCode, finalUrl }",
+      )
+      .replace("    // console.log(headers)\n", "")
+      .replace(
+        "if (statusCode > 400) return this.handleParseId(link, ++retryNum)",
+        "if (statusCode >= 400) return this.handleParseId(link, retryNum + 1)",
+      )
+      .replace(
+        share,
+        "    const url = location ? new URL(location, link).href : finalUrl || link",
+      );
+  }
   // Remove an upstream commented example cookie; it is not configuration.
   code = code.replace(/^.*\/\/ cookie:.*$/gm, "");
   for (const match of imports) {
@@ -113,6 +211,8 @@ while (pending.length) {
     if (!replacement.startsWith(".")) replacement = "./" + replacement;
     code = code.replace(match[0], match[0].replace(specifier, replacement));
   }
+  if (path.endsWith("/wy/songList.js"))
+    code = code.replace("import { weapi, linuxapi }", "import { weapi }");
   const dest = destination(path);
   if (path.endsWith("/infSign.min.js"))
     code =
@@ -172,6 +272,11 @@ for (const [index, name] of files.entries()) {
         throw new Error("Player catalog anchor changed: " + anchor);
       js = js.replace(anchor, replacement);
     };
+    // Leave room for the result pager when the mini-player is docked.
+    replaceOnce(
+      '{bottom:"32px",left:"50%",transform:"translate3d(-50%, 0, 0)"}',
+      '{bottom:"var(--sp-player-dock-bottom, 32px)",left:"50%",transform:"translate3d(-50%, 0, 0)"}',
+    );
     // Match the repeat icon's 80-unit shafts and 45-degree arrowheads.
     const orderIconPath =
       "M680 120 624 178 686 240H120V320H686L624 382L680 440L840 280Z" +
@@ -198,9 +303,14 @@ for (const [index, name] of files.entries()) {
       "i=K(()=>{switch(t.currentView)",
       'i=K(()=>{if(t.currentView==="library")return "我的音乐";if(t.catalog.kind!=="online")return "私人音乐库";switch(t.currentView)',
     );
+    // Keep the compiled sidebar list stable across catalog changes.
     replaceOnce(
-      '(p(),v(re,null,Se(s,m=>n("button",{key:m.id',
-      '(p(!0),v(re,null,Se(s.filter(m=>g(a).catalog.kind==="online"||m.id==="search"||m.id==="library"),m=>n("button",{key:m.id,"data-sp-view":m.id',
+      'Xd=["title","aria-label","aria-current","onClick"]',
+      'Xd=["title","aria-label","aria-current","onClick","hidden"]',
+    );
+    replaceOnce(
+      'Se(s,m=>n("button",{key:m.id',
+      'Se(s,m=>n("button",{key:m.id,"data-sp-view":m.id,hidden:g(a).catalog.kind!=="online"&&m.id!=="search"&&m.id!=="library"',
     );
     // Row, cover and menu playback use the same queue context. Single-click
     // selection stays available in multiselect, and touch retains tap-to-play.
@@ -268,10 +378,6 @@ for (const [index, name] of files.entries()) {
     );
     replaceOnce("r.playAll(t.songs.slice(0,1e3))", "r.playAll(t.songs)");
     replaceOnce("M.playAll(i.value.slice(0,1e3))", "M.playAll(i.value)");
-    // Filtering changes the number of children when catalog settings load.
-    // The compiler's original STABLE_FRAGMENT assumes an invariant child list;
-    // use a keyed fragment without block tracking, as Vue compiles dynamic v-for.
-    replaceOnce("],10,Xd)),64))])", "],10,Xd)),128))])");
     replaceOnce(
       "function Ot(e){return e?",
       "function Ot(e){if(e?.library)return globalThis.SpeakerLX.songKey(e);return e?",

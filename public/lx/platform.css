@@ -36,9 +36,10 @@ body {
   flex: 1;
   min-height: 0;
 }
-#app > .lxm-app {
-  height: 100% !important;
-  min-height: 0 !important;
+/* LX's default viewport height would put the toolbar on top of a full-height player. */
+#app > .lxm-app-layout {
+  width: 100%;
+  height: 100%;
 }
 /* Flex items otherwise stretch the selection pill across the navigation rail. */
 #app .lxm-sidebar-nav {
@@ -59,6 +60,9 @@ body {
 }
 #app .lxm-nav-item.lxm-active {
   box-shadow: inset 3px 0 0 var(--lxm-color-primary);
+}
+#app .lxm-nav-item[hidden] {
+  display: none;
 }
 #app .lxm-nav-text {
   overflow: hidden;
@@ -585,12 +589,29 @@ body .lyric-line {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-inline-start: auto;
+  flex: none;
+  justify-content: center;
+  padding: 4px 8px;
   white-space: nowrap;
 }
-.sp-private-catalog {
-  overflow: auto;
+.sp-catalog-pagination > button {
+  flex: none;
+}
+.sp-private-catalog > .lxm-song-table-card,
+.sp-private-catalog > .sp-collections {
+  flex: 1 1 0;
+  height: auto;
   min-height: 0;
+}
+.sp-private-catalog > .sp-collections {
+  overflow: auto;
+}
+.lxm-search-view.sp-private-catalog {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .sp-catalog-error {
   color: #b13e34;
@@ -610,4 +631,138 @@ body .lyric-line {
   #sp-lx-toolbar > div {
     flex-wrap: wrap;
   }
+}
+
+/* The player can be narrower than the page that embeds it. */
+#app .lxm-song-table-card {
+  container-type: inline-size;
+  min-width: 0;
+}
+#app .lxm-song-table-card .lxm-col-title,
+#app .lxm-song-table-card .lxm-col-singer,
+#app .lxm-song-table-card .lxm-col-album,
+#app .lxm-song-info,
+#app .lxm-song-meta {
+  min-width: 0;
+}
+#app .lxm-song-table-card .lxm-col-index {
+  box-sizing: border-box;
+  width: 44px;
+}
+#app .lxm-song-table-card .lxm-col-action {
+  box-sizing: border-box;
+  width: 44px;
+  padding-right: 0;
+}
+#app .lxm-song-table-card .lxm-col-time {
+  display: block !important;
+  box-sizing: border-box;
+  width: 60px;
+  padding-right: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#app .lxm-pagination-footer {
+  box-sizing: border-box;
+  min-height: 44px;
+  height: auto;
+  padding: 4px 8px;
+  gap: 6px;
+}
+#app .lxm-page-btn {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+#app .lxm-pagination-footer .lxm-desktop-text {
+  display: inline;
+}
+#app .lxm-page-info {
+  min-width: 0;
+  padding-inline: 2px;
+}
+#app .lxm-page-info > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@container (max-width: 570px) {
+  #app .lxm-song-table-card .lxm-col-singer,
+  #app .lxm-song-table-card .lxm-col-album,
+  #app .lxm-song-table-card .lxm-col-type {
+    display: none;
+  }
+  #app .lxm-song-table-card .lxm-song-singer-mobile {
+    display: block;
+  }
+  #app .lxm-song-table-card .lxm-col-time {
+    width: 43px;
+    padding-right: 0;
+  }
+  #app .lxm-song-table-card .lxm-list-header,
+  #app .lxm-song-table-card .lxm-song-row {
+    padding-inline: 8px;
+  }
+  #app .lxm-song-table-card .lxm-song-row {
+    padding-block: 6px;
+  }
+  #app .lxm-song-table-card .lxm-song-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 16px;
+    margin-bottom: 2px;
+  }
+  #app .lxm-song-table-card .lxm-col-index {
+    width: 28px;
+    padding-right: 4px;
+  }
+  #app .lxm-song-table-card .lxm-col-title {
+    gap: 8px;
+    padding-right: 6px;
+  }
+  #app .lxm-song-table-card .lxm-col-action {
+    width: 32px;
+  }
+}
+#app .lxm-search-result-panel,
+#app .lxm-search-view .lxm-list-body {
+  min-height: 0;
+}
+
+@media (max-height: 400px) {
+  #app .lxm-global-header {
+    height: 40px;
+  }
+  #app .lxm-search-view .lxm-list-header {
+    height: 34px;
+  }
+  #app .lxm-search-view {
+    gap: 6px;
+  }
+  #app .lxm-search-bar {
+    gap: 6px;
+    padding-block: 4px;
+  }
+  .sp-catalog-search,
+  .sp-catalog-actions {
+    margin-block: 0;
+  }
+}
+
+@media (min-width: 600px) and (max-height: 400px) {
+  #app .lxm-search-bar {
+    flex-wrap: nowrap;
+  }
+  #app .lxm-search-bar > :last-child {
+    flex: 1 1 0%;
+    min-width: 0;
+  }
+}
+body:has(.lxm-search-view :is(.lxm-pagination-footer, .sp-catalog-pagination)) {
+  --sp-player-dock-bottom: 72px;
 }

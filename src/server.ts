@@ -1613,8 +1613,6 @@ export async function executeAssistant(
   history: Array<{ role: "user" | "assistant"; content: string }> = [],
   trace?: AssistantRunTrace,
 ): Promise<Record<string, unknown>> {
-  const deviceId = store.snapshot().config.selectedDeviceId;
-  if (deviceId && miot instanceof MiotClient) void miot.warmSpeech(deviceId);
   const plan = await createUnderstandingAgent(store, fetchImpl).plan(
     text,
     history,
@@ -1681,20 +1679,16 @@ export async function executeAssistantIntent(
   if (intent.action === "native")
     return { intent, message: intent.reason, native: true };
   if (intent.action === "clarify") {
-    const speechError = context.deviceId
-      ? await speakIfAvailable(
-          playback,
-          state.selectedDeviceId,
-          state.devices,
-          intent.question,
-          context,
-          context.origin === "voice",
-        )
-      : undefined;
+    const speechError = await speakVoiceReply(
+      playback,
+      intent.question,
+      context,
+      true,
+    );
     return {
       intent,
       message: intent.question,
-      ...(context.origin === "voice" && !speechError
+      ...(context.origin === "voice" && context.deviceId && !speechError
         ? { spokenPrompt: intent.question.slice(0, 1000) }
         : {}),
       ...(speechError ? { speechError } : {}),
@@ -1712,13 +1706,7 @@ export async function executeAssistantIntent(
       location,
     );
     checkExecution(context);
-    const speechError = await speakIfAvailable(
-      playback,
-      state.selectedDeviceId,
-      state.devices,
-      message,
-      context,
-    );
+    const speechError = await speakVoiceReply(playback, message, context);
     return { intent, message, ...(speechError ? { speechError } : {}) };
   }
   if (intent.action === "answer") {
@@ -1812,13 +1800,7 @@ export async function executeAssistantIntent(
             : "AI 模型没有返回可用的回答，请重试。";
       } else answer = "请先在平台设置中配置可用的 AI 模型。";
     }
-    const speechError = await speakIfAvailable(
-      playback,
-      state.selectedDeviceId,
-      state.devices,
-      answer,
-      context,
-    );
+    const speechError = await speakVoiceReply(playback, answer, context);
     return {
       intent,
       message: answer,
@@ -2254,19 +2236,15 @@ function normalizeRequestedTrack(value: unknown): MusicTrack {
   };
 }
 
-async function speakIfAvailable(
+async function speakVoiceReply(
   playback: PlaybackService,
-  deviceId: string,
-  devices: Array<{ deviceId: string }>,
   text: string,
-  context?: ExecutionContext,
+  context: ExecutionContext,
   waitForReply = false,
 ): Promise<string | undefined> {
-  if (!deviceId || !devices.some((device) => device.deviceId === deviceId))
-    return undefined;
+  if (context.origin !== "voice" || !context.deviceId) return;
   try {
-    await playback.speak(deviceId, text, context, waitForReply);
-    return undefined;
+    await playback.speak(context.deviceId, text, context, waitForReply);
   } catch (error) {
     checkExecution(context);
     return safeMessage(error);

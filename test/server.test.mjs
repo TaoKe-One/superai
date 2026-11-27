@@ -445,6 +445,96 @@ test("ordinary AI answers do not call optional web search", async (t) => {
   assert.equal(result.searchUsed, false);
 });
 
+test("web assistant replies and clarifications never issue speaker commands", async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), "superai-web-text-"));
+  const store = new JsonStore(dataDir);
+  await store.init();
+  await store.update(({ config }) => {
+    config.ai.baseUrl = "https://model.example/v1";
+    config.ai.model = "fixture";
+    config.ai.apiKey = store.encrypt("fixture-model-key");
+    config.devices = [
+      {
+        deviceId: "speaker",
+        name: "客厅",
+        model: "",
+        hardware: "L05C",
+        presence: "online",
+        location: "杭州市西湖区",
+      },
+    ];
+    config.selectedDeviceId = "speaker";
+    config.xiaomi = {
+      userId: "fixture",
+      passToken: store.encrypt("fixture-pass"),
+      serviceToken: store.encrypt("fixture-token"),
+      serviceTokenExpiresAt: Date.now() + 600_000,
+    };
+  });
+  const cases = [
+    [
+      "介绍一下火星",
+      { action: "answer", answer: "火星是太阳系的一颗行星。" },
+      "火星是太阳系的一颗行星。",
+    ],
+    [
+      "这台音箱的位置",
+      { action: "device_status", field: "location" },
+      "当前使用的地区是杭州市西湖区。",
+    ],
+    [
+      "我有一个问题",
+      { action: "clarify", question: "你想了解什么？" },
+      "你想了解什么？",
+    ],
+  ];
+  const deviceCommands = [];
+  const server = await createAppServer({
+    dataDir,
+    async fetchImpl(input, options) {
+      if (new URL(String(input)).hostname === "model.example") {
+        const text = JSON.parse(options.body).messages.at(-1).content;
+        const intent = cases.find(([question]) => text.includes(question))?.[1];
+        assert.ok(intent);
+        return Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ ...intent, confidence: 1 }),
+              },
+            },
+          ],
+        });
+      }
+      deviceCommands.push(options.body?.get?.("method") ?? "speaker request");
+      return Response.json({ code: 0, data: { code: 0 } });
+    },
+  });
+  t.after(async () => {
+    server.emit("close");
+    await server.flushLogs();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  const setup = await requestApp(server, "/api/setup", "POST", {
+    password: "fixture-password",
+  });
+  const cookie = setup.headers["set-cookie"].split(";", 1)[0];
+  for (const [text, intent, message] of cases) {
+    const response = await requestApp(
+      server,
+      "/api/assistant/command",
+      "POST",
+      { text, origin: "voice", deviceId: "speaker" },
+      cookie,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.body.intent.action, intent.action);
+    assert.equal(response.body.message, message);
+    assert.equal(response.body.spokenPrompt, undefined);
+  }
+  assert.deepEqual(deviceCommands, []);
+});
+
 test("settings preserve omitted secrets and can explicitly clear them", async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), "speaker-platform-settings-"));
   t.after(() => rm(dataDir, { recursive: true, force: true }));
