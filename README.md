@@ -35,7 +35,7 @@ docker run -d --name superai --restart unless-stopped \
   taokeone/superai:0.1.8
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。两处镜像仓库均提供版本标签和 `latest`。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+配置、歌单和密钥保存在 `superai-data` 数据卷。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)。当前 v0.1.8 已确认发布到 GHCR。Docker Hub 的 v0.1.8 同步尚未完成，无法拉取时请使用下面的 GHCR 地址。
 
 `-p 8787:8787` 将端口发布到宿主机的所有接口。局域网设备用 `http://<部署机局域网IP>:8787` 访问，只允许本机访问时用 `-p 127.0.0.1:8787:8787`。已有容器需要沿用原数据卷重新创建，才能更改端口绑定。[局域网访问](docs/deployment.md#局域网访问)
 

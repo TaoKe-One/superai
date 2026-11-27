@@ -12,7 +12,7 @@ docker run -d --name superai --restart unless-stopped \
   taokeone/superai:0.1.8
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
+Settings, playlists, and the key live in the `superai-data` volume. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai). v0.1.8 is confirmed on GHCR. The Docker Hub v0.1.8 sync is incomplete, so use the GHCR reference below if Docker Hub cannot pull it.
 
 `-p 8787:8787` publishes the port on all host interfaces. For LAN access, open `http://<host-LAN-IP>:8787` from another device. For host-only access, use `-p 127.0.0.1:8787:8787`. To change the binding for an existing container, recreate it with its original data volume. [LAN access](#lan-access)
 
