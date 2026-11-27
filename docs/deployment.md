@@ -4,15 +4,15 @@
 
 ## Docker
 
-Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本。Docker 会根据系统架构自动选择。ARM 设备需要运行 64 位系统。
+GHCR 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本。Docker 会根据系统架构自动选择。ARM 设备需要运行 64 位系统。
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.8
+  ghcr.io/taoke-one/superai:0.1.8
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)。当前 v0.1.8 已确认发布到 GHCR。Docker Hub 的 v0.1.8 同步尚未完成，无法拉取时请使用下面的 GHCR 地址。
+配置、歌单和密钥保存在 `superai-data` 数据卷。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)。当前 v0.1.8 已确认发布到 GHCR。Docker Hub 仅作为同步完成后的可选地址，当前请使用上面的 GHCR 地址。
 
 `-p 8787:8787` 将端口发布到宿主机的所有接口。局域网设备用 `http://<部署机局域网IP>:8787` 访问，只允许本机访问时用 `-p 127.0.0.1:8787:8787`。已有容器需要沿用原数据卷重新创建，才能更改端口绑定。[局域网访问](#局域网访问)
 
@@ -29,7 +29,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.8
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.8
+    image: ghcr.io/taoke-one/superai:0.1.8
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 也可在源码目录使用仓库内的 Compose 文件。已有部署请沿用原 Compose 项目与数据卷。
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.8 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=ghcr.io/taoke-one/superai:0.1.8 docker compose up -d --no-build --pull always
 ```
 
 可把 `SUPERAI_IMAGE` 保存到 `.env`，需要升级时更换版本标签，再执行 `docker compose up -d --no-build --pull always`。如果要从本地源码构建，移除 `SUPERAI_IMAGE` 后执行 `docker compose up -d --build`。
@@ -108,7 +108,7 @@ README 中的 Docker 和 Docker Compose 快速部署示例将端口发布到宿�
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.8
+  ghcr.io/taoke-one/superai:0.1.8
 ```
 
 使用仓库自带的 Compose 配置时，在原项目的 `.env` 中将 `PUBLISH_HOST` 设为 `0.0.0.0` 或部署机的局域网 IP，再执行 `docker compose up -d`。使用 README 的独立 Compose 示例时，直接修改 `ports`。使用 Node.js 时，设置 `HOST` 后重启。
@@ -139,7 +139,7 @@ docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8788:8788 \
   -e SPEAKER_RELAY_HOST=0.0.0.0 -e SPEAKER_RELAY_PORT=8788 \
   -e SPEAKER_RELAY_BASE_URL=http://192.168.1.10:8788 \
-  taokeone/superai:0.1.8
+  ghcr.io/taoke-one/superai:0.1.8
 ```
 
 已有容器先拉取新版镜像，并备份原数据卷与容器配置。停止旧容器并重命名，例如改为 `superai-before-relay`。按上例创建新容器，沿用原 `/data` 挂载、管理端口绑定和环境变量，再加入转跳参数。若配置过自管 `MASTER_KEY`，继续使用原值。Docker 在创建容器时确定端口映射，新增转跳端口需要重建容器。转跳已配置且可用时，可从平台设置升级，继续使用现有端口映射。[Docker 端口映射](https://docs.docker.com/engine/network/port-publishing/)

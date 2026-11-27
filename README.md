@@ -27,15 +27,15 @@
 
 ### 方式一：Docker 镜像
 
-Docker Hub 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本。Docker 会根据系统架构自动选择。ARM 设备需要运行 64 位系统。
+GHCR 镜像内置 FFmpeg，包含 Linux `amd64` 和 `arm64` 两个版本。Docker 会根据系统架构自动选择。ARM 设备需要运行 64 位系统。
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.8
+  ghcr.io/taoke-one/superai:0.1.8
 ```
 
-配置、歌单和密钥保存在 `superai-data` 数据卷。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)。当前 v0.1.8 已确认发布到 GHCR。Docker Hub 的 v0.1.8 同步尚未完成，无法拉取时请使用下面的 GHCR 地址。
+配置、歌单和密钥保存在 `superai-data` 数据卷。[Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)。当前 v0.1.8 已确认发布到 GHCR。Docker Hub 仅作为同步完成后的可选地址，当前请使用上面的 GHCR 地址。
 
 `-p 8787:8787` 将端口发布到宿主机的所有接口。局域网设备用 `http://<部署机局域网IP>:8787` 访问，只允许本机访问时用 `-p 127.0.0.1:8787:8787`。已有容器需要沿用原数据卷重新创建，才能更改端口绑定。[局域网访问](docs/deployment.md#局域网访问)
 
@@ -52,7 +52,7 @@ docker pull ghcr.io/taoke-one/superai:0.1.8
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.8
+    image: ghcr.io/taoke-one/superai:0.1.8
     restart: unless-stopped
     ports:
       - "8787:8787"

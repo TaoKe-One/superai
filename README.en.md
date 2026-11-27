@@ -27,15 +27,15 @@ Choose one deployment method. After setup, open [http://localhost:8787](http://l
 
 ### Option 1 — Docker image
 
-The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Docker selects the matching architecture automatically. ARM devices need a 64-bit operating system.
+The GHCR image includes FFmpeg and supports Linux `amd64` and `arm64`. Docker selects the matching architecture automatically. ARM devices need a 64-bit operating system.
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.8
+  ghcr.io/taoke-one/superai:0.1.8
 ```
 
-Settings, playlists, and the key live in the `superai-data` volume. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai). v0.1.8 is confirmed on GHCR. The Docker Hub v0.1.8 sync is incomplete, so use the GHCR reference below if Docker Hub cannot pull it.
+Settings, playlists, and the key live in the `superai-data` volume. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai). v0.1.8 is confirmed on GHCR. Docker Hub is an optional mirror after synchronization. Use the GHCR reference above for v0.1.8.
 
 `-p 8787:8787` publishes the port on all host interfaces. For LAN access, open `http://<host-LAN-IP>:8787` from another device. For host-only access, use `-p 127.0.0.1:8787:8787`. To change the binding for an existing container, recreate it with its original data volume. [LAN access](docs/deployment.en.md#lan-access)
 
@@ -52,7 +52,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.8
+    image: ghcr.io/taoke-one/superai:0.1.8
     restart: unless-stopped
     ports:
       - "8787:8787"
