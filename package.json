@@ -1,6 +1,6 @@
 {
   "name": "superai",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Self-hosted web player and voice integration for Xiaomi speakers",
   "license": "Apache-2.0",
   "private": true,

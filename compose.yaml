@@ -18,6 +18,9 @@ services:
       MASTER_KEY: ${MASTER_KEY:-}
     ports:
       - "${PUBLISH_HOST:-127.0.0.1}:${PUBLISH_PORT:-8787}:8787"
+      # Enable only with SPEAKER_RELAY_HOST, SPEAKER_RELAY_BASE_URL, and a
+      # LAN-only host address. Never publish this port to the public Internet.
+      # - "192.168.1.10:8788:8788"
     volumes:
       - speaker-data:/data
 

@@ -32,7 +32,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.7
+  taokeone/superai:0.1.8
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -42,7 +42,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.7
+docker pull ghcr.io/taoke-one/superai:0.1.8
 ```
 
 ### Option 2 — Docker Compose
@@ -52,7 +52,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.7
+    image: taokeone/superai:0.1.8
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -69,7 +69,9 @@ Run this in the same directory.
 docker compose up -d
 ```
 
-You can also set `image` to `ghcr.io/taoke-one/superai:0.1.7`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
+You can also set `image` to `ghcr.io/taoke-one/superai:0.1.8`. For an existing Compose deployment, update the image in the same project to keep its data volume. [Repository Compose configuration](docs/deployment.en.md#docker-compose)
+
+The standard deployment publishes only `8787`. If a speaker accepts a cast and stays at 0 seconds, explicitly enable `8788` using the [speaker URL relay setup](docs/deployment.en.md#cast-accepted-but-no-audio). Bind the relay only to a LAN address reachable by the speaker. Do not use `127.0.0.1` for the relay address or forward the relay port from the public Internet.
 
 ### Option 3 — Command line
 

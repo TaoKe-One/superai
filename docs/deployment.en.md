@@ -9,7 +9,7 @@ The Docker Hub image includes FFmpeg and supports Linux `amd64` and `arm64`. Doc
 ```bash
 docker run -d --name superai --restart unless-stopped \
   -p 8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.7
+  taokeone/superai:0.1.8
 ```
 
 Settings, playlists, and the key live in the `superai-data` volume. Both registries provide versioned tags and `latest`. [Docker Hub](https://hub.docker.com/r/taokeone/superai) · [GitHub Container Registry](https://github.com/TaoKe-One/superai/pkgs/container/superai)
@@ -19,7 +19,7 @@ Settings, playlists, and the key live in the `superai-data` volume. Both registr
 You can also pull from GitHub or use the same reference in the run command above.
 
 ```bash
-docker pull ghcr.io/taoke-one/superai:0.1.7
+docker pull ghcr.io/taoke-one/superai:0.1.8
 ```
 
 ## Docker Compose
@@ -29,7 +29,7 @@ Create `compose.yaml` in your deployment directory with the following contents.
 ```yaml
 services:
   superai:
-    image: taokeone/superai:0.1.7
+    image: taokeone/superai:0.1.8
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -49,7 +49,7 @@ docker compose up -d
 To use the Compose file included in the repository, run this in the project root. Existing installations should keep the same Compose project and data volume.
 
 ```bash
-PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.7 docker compose up -d --no-build --pull always
+PUBLISH_HOST=0.0.0.0 SUPERAI_IMAGE=taokeone/superai:0.1.8 docker compose up -d --no-build --pull always
 ```
 
 You can save `SUPERAI_IMAGE` in `.env`. To upgrade, change its version tag and run `docker compose up -d --no-build --pull always`. For a local source build, remove `SUPERAI_IMAGE` and run `docker compose up -d --build`.
@@ -108,7 +108,7 @@ An existing container deployed with `-p 127.0.0.1:8787:8787` accepts connections
 docker stop superai && docker rename superai superai-local && \
 docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8787:8787 -v superai-data:/data \
-  taokeone/superai:0.1.7
+  taokeone/superai:0.1.8
 ```
 
 For the repository Compose file, set `PUBLISH_HOST` to `0.0.0.0` or the host's LAN IP in the existing project's `.env`, then run `docker compose up -d`. With the standalone Compose example in the README, edit `ports` directly. For Node.js, set `HOST` and restart the process.
@@ -127,11 +127,11 @@ When upgrading an existing Docker deployment, keep its Compose project name and 
 
 Play the same track in the browser first. If the speaker accepts playback and stays paused at 0 seconds, such as the Xiaomi Speaker Play (L05C) with some QQ Music links, enable the song URL relay. The relay gives the speaker a temporary URL without query parameters and returns an HTTP 302 to the original audio URL with its signature intact. Each ticket expires after 30 minutes or when the app restarts. The relay port serves song tickets only.
 
-Replace the sample address below with the Docker host's LAN IP that the speaker can reach. Keep the relay off public interfaces and router port forwarding.
+Port `8788` is not published by default and has no effect on browser-only deployments. Add the mapping only when the relay is enabled. Replace the sample address below with the Docker host's LAN IP that the speaker can reach. Keep the relay off public interfaces and router port forwarding. `SPEAKER_RELAY_BASE_URL` must use that LAN address. Do not use `127.0.0.1`, `localhost`, or the container address.
 
 ### Docker run
 
-For a new container, add the relay environment variables and the LAN-only port mapping when you create it. The example publishes the admin UI on loopback. Use your own admin port binding.
+For a new container, add the relay environment variables and the LAN-only port mapping when you create it. The example publishes the admin UI on loopback. Replace `192.168.1.10` with the deployment host's LAN IP and confirm that the speaker can reach it.
 
 ```bash
 docker run -d --name superai --restart unless-stopped \
@@ -139,14 +139,14 @@ docker run -d --name superai --restart unless-stopped \
   -p 192.168.1.10:8788:8788 \
   -e SPEAKER_RELAY_HOST=0.0.0.0 -e SPEAKER_RELAY_PORT=8788 \
   -e SPEAKER_RELAY_BASE_URL=http://192.168.1.10:8788 \
-  taokeone/superai:0.1.7
+  taokeone/superai:0.1.8
 ```
 
 For an existing container, pull the image and back up the original volume and container settings. Stop the container and rename it, for example to `superai-before-relay`. Create the replacement with the original `/data` mount, original admin port binding and environment variables, plus the relay options above. Preserve `MASTER_KEY` if you set it yourself. Docker assigns published ports at container creation, so adding the relay mapping requires recreating the container. If your relay already works, you can update SuperAI from Settings and keep the existing port mapping. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/)
 
 ### Docker Compose
 
-Add the relay options to the existing `superai` service or put the following in `compose.override.yaml`. Run `docker compose up -d` under the same project name to recreate the service with the existing volume. For an image-based service, update its image tag and pull it before starting.
+For a new Compose deployment, add the following environment variables and port mapping to the standard example. For an existing deployment, put them in `compose.override.yaml`, keep the same Compose project name, and run `docker compose up -d` to recreate the service with the existing volume. For an image-based service, update its image tag and pull it before starting.
 
 ```yaml
 services:
@@ -156,16 +156,18 @@ services:
       SPEAKER_RELAY_PORT: "8788"
       SPEAKER_RELAY_BASE_URL: "http://192.168.1.10:8788"
     ports:
+      - "8787:8787"
       - "192.168.1.10:8788:8788"
 ```
 
 ### Command line
 
-Add the settings below to `.env`, then restart.
+Add the settings below to `.env`, then restart. A native Node.js process can listen directly on the deployment host's LAN IP. If you use `0.0.0.0`, restrict `8788` to the LAN with the host firewall.
 
 ```dotenv
 SPEAKER_RELAY_HOST=192.168.1.10
 SPEAKER_RELAY_PORT=8788
+SPEAKER_RELAY_BASE_URL=http://192.168.1.10:8788
 ```
 
 ## Forgotten administrator password
